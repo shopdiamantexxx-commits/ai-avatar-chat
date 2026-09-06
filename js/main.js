@@ -18,6 +18,7 @@ const els = {
   btnToggleSession: $("btn-toggle-session"),
   btnCameraToggle: $("btn-camera-toggle"),
   cameraDeviceSelect: $("camera-device-select"),
+  btnDance: $("btn-dance"),
   textInput: $("text-input"),
   btnSendText: $("btn-send-text"),
   transcriptLog: $("transcript-log"),
@@ -100,6 +101,10 @@ viewer
     console.error(err);
     setStatus("3D表示の初期化に失敗しました(コンソール参照)", "error");
   });
+
+els.btnDance.addEventListener("click", () => {
+  viewer.startDance();
+});
 
 async function restoreSavedVrm() {
   try {

@@ -34,6 +34,9 @@ export class VrmViewer {
     this.mouthTarget = 0;
     this.mouthCurrent = 0;
     this._boneBaseRotations = null;
+    this._hipsBasePosition = null;
+    this._danceStartTime = null;
+    this._danceDurationMs = 8000;
     this._ready = false;
     this._raf = null;
   }
@@ -252,6 +255,20 @@ export class VrmViewer {
       const node = humanoid.getNormalizedBoneNode(name);
       if (node) this._boneBaseRotations[name] = node.rotation.clone();
     }
+
+    // ダンス中の上下バウンスの基準として、腰の元の高さを控えておく
+    const hipsNode = humanoid.getNormalizedBoneNode("hips");
+    this._hipsBasePosition = hipsNode ? hipsNode.position.clone() : null;
+  }
+
+  /** 指定した時間(ミリ秒、既定8秒)だけダンスモーションを再生する */
+  startDance(durationMs = 8000) {
+    this._danceStartTime = performance.now();
+    this._danceDurationMs = durationMs;
+  }
+
+  get isDancing() {
+    return this._danceStartTime !== null && performance.now() - this._danceStartTime < this._danceDurationMs;
   }
 
   async unloadVrm() {
@@ -281,6 +298,12 @@ export class VrmViewer {
     const base = this._boneBaseRotations;
     if (!humanoid || !base) return;
     const t = nowMs / 1000;
+
+    if (this.isDancing) {
+      this._animateDance(humanoid, base, t);
+      this._animateFingerWiggle(humanoid, base, t);
+      return;
+    }
 
     // 単一周期のsin波だけだと機械的な繰り返しに見えるため、周期の異なる波を
     // 複数重ねて「呼吸のような大きなゆらぎ」+「不規則な微動」を作る。
@@ -324,15 +347,71 @@ export class VrmViewer {
       rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + Math.sin(t * 4.1 + 0.6) * 0.16 * talk;
     }
 
-    // 指にもごく小さな揺れを足して、完全に固まって見えないようにする
-    if (this._fingerBoneNames) {
-      const fingerWiggle = Math.sin(t * 1.3) * 0.03 + Math.sin(t * 2.1 + 1.0) * 0.02;
-      for (const name of this._fingerBoneNames) {
-        const node = humanoid.getNormalizedBoneNode(name);
-        if (node && base[name] !== undefined) {
-          node.rotation.z = base[name].z + fingerWiggle;
-        }
+    this._animateFingerWiggle(humanoid, base, t);
+  }
+
+  /** 指にもごく小さな揺れを足して、完全に固まって見えないようにする */
+  _animateFingerWiggle(humanoid, base, t) {
+    if (!this._fingerBoneNames) return;
+    const fingerWiggle = Math.sin(t * 1.3) * 0.03 + Math.sin(t * 2.1 + 1.0) * 0.02;
+    for (const name of this._fingerBoneNames) {
+      const node = humanoid.getNormalizedBoneNode(name);
+      if (node && base[name] !== undefined) {
+        node.rotation.z = base[name].z + fingerWiggle;
       }
+    }
+  }
+
+  /**
+   * ダンスモーション。一定のビートに合わせて、腰の左右の揺れ+上下バウンス、
+   * 背骨の捻り、腕の振り上げ、首の縦揺れを組み合わせた簡易的な振り付け。
+   * startDance()が呼ばれてから_danceDurationMsが経過するまで再生される。
+   */
+  _animateDance(humanoid, base, t) {
+    const beat = t * 2.6;
+
+    const hips = humanoid.getNormalizedBoneNode("hips");
+    if (hips && base.hips) {
+      hips.rotation.z = base.hips.z + Math.sin(beat) * 0.14;
+      hips.rotation.y = Math.sin(beat * 0.5) * 0.18;
+      if (this._hipsBasePosition) {
+        hips.position.y = this._hipsBasePosition.y + Math.abs(Math.sin(beat * 2)) * 0.035;
+      }
+    }
+
+    const spine = humanoid.getNormalizedBoneNode("spine");
+    if (spine && base.spine) {
+      spine.rotation.y = Math.sin(beat * 0.5 + 1.2) * 0.22;
+      spine.rotation.z = base.spine.z + Math.sin(beat + 1) * 0.06;
+    }
+
+    const neck = humanoid.getNormalizedBoneNode("neck");
+    if (neck && base.neck) {
+      neck.rotation.x = base.neck.x + Math.sin(beat * 2) * 0.06;
+      neck.rotation.z = base.neck.z + Math.sin(beat * 0.5) * 0.09;
+    }
+
+    // 腕を左右交互に振り上げる(0〜1に正規化したsin波で「休め」姿勢から持ち上げる)
+    const raiseL = Math.sin(beat) * 0.5 + 0.5;
+    const raiseR = Math.sin(beat + Math.PI) * 0.5 + 0.5;
+    const upDeg = (Math.PI / 180) * 55;
+
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    if (leftUpperArm && base.leftUpperArm) {
+      leftUpperArm.rotation.z = base.leftUpperArm.z + raiseL * upDeg;
+    }
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    if (rightUpperArm && base.rightUpperArm) {
+      rightUpperArm.rotation.z = base.rightUpperArm.z - raiseR * upDeg;
+    }
+
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    if (leftLowerArm && base.leftLowerArm) {
+      leftLowerArm.rotation.x = base.leftLowerArm.x + Math.sin(beat * 1.5) * 0.35;
+    }
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    if (rightLowerArm && base.rightLowerArm) {
+      rightLowerArm.rotation.x = base.rightLowerArm.x + Math.sin(beat * 1.5 + Math.PI) * 0.35;
     }
   }
 
