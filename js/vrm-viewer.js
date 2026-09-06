@@ -54,6 +54,10 @@ export class VrmViewer {
     this._hipsBasePosition = null;
     this._danceStartTime = null;
     this._danceDurationMs = 8000;
+    // 会話中の短いワンショット・ジェスチャーの状態
+    this._gestureName = null;
+    this._gestureStartTime = null;
+    this._gestureDurationMs = 0;
     // 頭のランダムな微動(正規分布ノイズ)の状態
     this._headTargetX = 0;
     this._headTargetY = 0;
@@ -326,6 +330,35 @@ export class VrmViewer {
     return this._danceStartTime !== null && performance.now() - this._danceStartTime < this._danceDurationMs;
   }
 
+  /**
+   * 会話中に呼び出す短いワンショット・ジェスチャーを再生する。
+   * ダンス中は無視する(既存の振り付けと衝突しないように)。
+   * @param {"nod"|"tilt_head"|"explain_hands"|"point"|"shrug"|"think_pose"|"cover_mouth"|"cross_arms"} name
+   */
+  playGesture(name, durationMs) {
+    const defaultDurations = {
+      nod: 1400,
+      tilt_head: 1800,
+      explain_hands: 2200,
+      point: 1600,
+      shrug: 1600,
+      think_pose: 2600,
+      cover_mouth: 1600,
+      cross_arms: 2400,
+    };
+    if (!name || name === "none" || !(name in defaultDurations)) return;
+    if (this.isDancing) return;
+    this._gestureName = name;
+    this._gestureStartTime = performance.now();
+    this._gestureDurationMs = durationMs || defaultDurations[name];
+  }
+
+  get isGesturing() {
+    return (
+      this._gestureName !== null && performance.now() - this._gestureStartTime < this._gestureDurationMs
+    );
+  }
+
   async unloadVrm() {
     if (this.vrm) {
       this.scene.remove(this.vrm.scene);
@@ -364,6 +397,14 @@ export class VrmViewer {
       }
       this._animateFingerWiggle(humanoid, base, t);
       return;
+    }
+
+    if (this.isGesturing) {
+      this._animateGesture(humanoid, base, nowMs);
+      this._animateFingerWiggle(humanoid, base, t);
+      return;
+    } else if (this._gestureName !== null) {
+      this._gestureName = null; // 再生時間が終わったので待機モーションへ戻す
     }
 
     // 単一周期のsin波だけだと機械的な繰り返しに見えるため、周期の異なる波を
@@ -672,6 +713,99 @@ export class VrmViewer {
     if (leftLowerLeg) leftLowerLeg.rotation.x = legPhase * 0.15;
     const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
     if (rightLowerLeg) rightLowerLeg.rotation.x = (1 - legPhase) * 0.15;
+  }
+
+  /**
+   * 会話中の短いワンショット・ジェスチャー(nod/tilt_head/explain_hands/point/
+   * shrug/think_pose/cover_mouth/cross_arms)を再生する。
+   * ダンスと違って一度きりの動作なので、経過時間(elapsed)に対して
+   * sin(π×progress)の弧(0→1→0)を「入り・抜けのなめらかさ」として掛け、
+   * 動作の始まりと終わりが唐突にならないようにしている。
+   * upperArmを前方(X軸)に回す動き(think_pose/cover_mouth/point/cross_arms)は
+   * 実機未確認のため、逆向きに見える場合は符号を反転させる想定。
+   */
+  _animateGesture(humanoid, base, nowMs) {
+    const elapsed = (nowMs - this._gestureStartTime) / 1000;
+    const durationSec = this._gestureDurationMs / 1000;
+    const progress = Math.min(1, elapsed / durationSec);
+    const envelope = Math.sin(progress * Math.PI); // 0→1→0
+
+    const neck = humanoid.getNormalizedBoneNode("neck");
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    const leftShoulder = humanoid.getNormalizedBoneNode("leftShoulder");
+    const rightShoulder = humanoid.getNormalizedBoneNode("rightShoulder");
+
+    switch (this._gestureName) {
+      case "nod": {
+        if (neck && base.neck) {
+          neck.rotation.x = base.neck.x + Math.sin(elapsed * Math.PI * 4) * 0.18 * envelope;
+        }
+        break;
+      }
+      case "tilt_head": {
+        if (neck && base.neck) neck.rotation.z = base.neck.z + 0.22 * envelope;
+        break;
+      }
+      case "think_pose": {
+        // 右手を顎のあたりへ持っていくイメージ
+        if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.5 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.7 * envelope;
+        if (neck && base.neck) neck.rotation.z = base.neck.z + 0.15 * envelope;
+        break;
+      }
+      case "cover_mouth": {
+        if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.55 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 2.0 * envelope;
+        break;
+      }
+      case "explain_hands": {
+        const wave = Math.sin(elapsed * Math.PI * 2.4);
+        if (leftUpperArm && base.leftUpperArm) {
+          leftUpperArm.rotation.z = base.leftUpperArm.z + (0.35 + wave * 0.15) * envelope;
+        }
+        if (rightUpperArm && base.rightUpperArm) {
+          rightUpperArm.rotation.z = base.rightUpperArm.z - (0.35 - wave * 0.15) * envelope;
+        }
+        if (leftLowerArm && base.leftLowerArm) {
+          leftLowerArm.rotation.x = base.leftLowerArm.x + (0.3 + wave * 0.2) * envelope;
+        }
+        if (rightLowerArm && base.rightLowerArm) {
+          rightLowerArm.rotation.x = base.rightLowerArm.x + (0.3 - wave * 0.2) * envelope;
+        }
+        break;
+      }
+      case "point": {
+        if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.9 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 0.1 * envelope;
+        break;
+      }
+      case "shrug": {
+        if (leftShoulder) leftShoulder.rotation.z = 0.3 * envelope;
+        if (rightShoulder) rightShoulder.rotation.z = -0.3 * envelope;
+        if (leftUpperArm && base.leftUpperArm) leftUpperArm.rotation.z = base.leftUpperArm.z + 0.15 * envelope;
+        if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.15 * envelope;
+        if (neck && base.neck) neck.rotation.x = base.neck.x + 0.08 * envelope;
+        break;
+      }
+      case "cross_arms": {
+        if (leftUpperArm && base.leftUpperArm) {
+          leftUpperArm.rotation.z = base.leftUpperArm.z + 0.55 * envelope;
+          leftUpperArm.rotation.x = 0.5 * envelope;
+        }
+        if (rightUpperArm && base.rightUpperArm) {
+          rightUpperArm.rotation.z = base.rightUpperArm.z - 0.55 * envelope;
+          rightUpperArm.rotation.x = 0.5 * envelope;
+        }
+        if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + 1.6 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.6 * envelope;
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   _tick() {

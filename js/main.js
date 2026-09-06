@@ -398,8 +398,8 @@ async function startSession() {
     clearPlayback();
     finalizePendingOutputLine();
   });
-  // [検証用/Phase 0] DevToolsを開かなくても確認できるよう、toolCall受信内容を
-  // 画面左下に直接表示する。確認が終わったらこのブロックごと削除してよい。
+  // AIからのexpress()呼び出しを、実際のジェスチャー再生に繋ぐ。
+  // 画面左下の表示は[検証用/Phase 0]の名残り(DevToolsなしで確認できるよう残してある)。
   client.addEventListener("toolCall", (e) => {
     const time = new Date().toLocaleTimeString("ja-JP");
     const calls = (e.detail.functionCalls || [])
@@ -407,6 +407,11 @@ async function startSession() {
       .join("\n");
     if (els.debugToolcall) {
       els.debugToolcall.textContent = `[${time}] toolCall受信:\n${calls || JSON.stringify(e.detail)}`;
+    }
+    for (const call of e.detail.functionCalls || []) {
+      if (call.name === "express" && call.args?.gesture) {
+        viewer.playGesture(call.args.gesture);
+      }
     }
   });
   client.addEventListener("error", (e) => {
