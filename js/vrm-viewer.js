@@ -5,6 +5,21 @@
 let THREE, GLTFLoader, VRMLoaderPlugin, VRMUtils, OrbitControls;
 let modulesPromise = null;
 
+/**
+ * 正規分布(ガウス分布)に従う乱数を1つ返す(Box-Muller変換)。
+ * 単純なsin波による周期運動だけだと「毎回同じ動きの繰り返し」に見えて
+ * しまうため、頭の細かい動きにはこちらを使い、時々ランダムな目標角度を
+ * サンプリングしてゆっくり追従させることで、人間の間の悪さ・不規則さに
+ * 近い動きを作る。
+ */
+function randomNormal(mean = 0, stdDev = 1) {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return mean + stdDev * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
 async function loadModules() {
   if (!modulesPromise) {
     modulesPromise = Promise.all([
@@ -39,6 +54,12 @@ export class VrmViewer {
     this._hipsBasePosition = null;
     this._danceStartTime = null;
     this._danceDurationMs = 8000;
+    // 頭のランダムな微動(正規分布ノイズ)の状態
+    this._headTargetX = 0;
+    this._headTargetY = 0;
+    this._headCurrentX = 0;
+    this._headCurrentY = 0;
+    this._headResampleAt = 0;
     this._ready = false;
     this._raf = null;
   }
@@ -262,6 +283,7 @@ export class VrmViewer {
       "hips",
       "spine",
       "neck",
+      "head",
       "leftUpperArm",
       "rightUpperArm",
       "leftLowerArm",
@@ -326,7 +348,7 @@ export class VrmViewer {
    * ここでは毎フレーム「絶対値」で角度を代入している(前回値に加算しない)ので、
    * 値が際限なく大きくなっていく心配はない。
    */
-  _animateIdleBody(vrm, nowMs) {
+  _animateIdleBody(vrm, nowMs, delta) {
     const humanoid = vrm.humanoid;
     const base = this._boneBaseRotations;
     if (!humanoid || !base) return;
@@ -359,8 +381,11 @@ export class VrmViewer {
     const neck = humanoid.getNormalizedBoneNode("neck");
     if (neck && base.neck) {
       neck.rotation.z = base.neck.z + micro * 0.02;
-      neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.02;
     }
+
+    // 頭の細かい動きの目標角度だけここで更新しておく(実際にボーンへ反映するのは
+    // 視線追従(lookAt)と競合しないよう vrm.update() の後、_tick()側で行う)。
+    this._updateHeadFidgetTarget(t, delta);
 
     // 話している間は、常時の揺れに加えて腕の身振り手振りを上乗せする。
     // 実際の人間の身振りは左右対称でも一定のリズムでもないため、
@@ -406,6 +431,43 @@ export class VrmViewer {
         node.rotation.z = base[name].z + fingerWiggle;
       }
     }
+  }
+
+  /**
+   * 頭を正規分布ノイズでランダムに、少しずつ動かす。
+   * 一定間隔(約1.5〜3.5秒ごと)でランダムな目標角度を新しくサンプリングし、
+   * そこへゆっくり(delta基準で)追従させることで、一定周期のsin波にはない
+   * 「間」や不規則さを作る。x=縦(うなずき方向)、y=横(首振り方向)。
+   */
+  _updateHeadFidgetTarget(t, delta) {
+    if (t >= this._headResampleAt) {
+      const degToRad = Math.PI / 180;
+      this._headTargetX = randomNormal(0, 2) * degToRad; // 標準偏差2度
+      this._headTargetY = randomNormal(0, 3) * degToRad; // 標準偏差3度
+      this._headResampleAt = t + 1.5 + Math.random() * 2;
+    }
+    const followSpeed = Math.min(1, delta * 1.5);
+    this._headCurrentX += (this._headTargetX - this._headCurrentX) * followSpeed;
+    this._headCurrentY += (this._headTargetY - this._headCurrentY) * followSpeed;
+  }
+
+  /**
+   * 頭のランダムな微動を、視線追従(lookAt)が計算し終えたrawボーンに
+   * 加算する。lookAtが頭のボーンを直接動かすタイプのVRMだと、
+   * これをlookAtの計算前(vrm.update()前)に行っても上書きされてしまうため、
+   * 必ずvrm.update()の後、rawボーン(getRawBoneNode)に対して加算する。
+   */
+  _applyHeadFidget(vrm) {
+    if (this.isDancing) return; // ダンス中は各振り付け側の頭の動きを優先する
+    const humanoid = vrm.humanoid;
+    if (!humanoid) return;
+    // ヘッドフィジェットの適用にはgetRawBoneNodeを直接操作するため、
+    // ここではhumanoidの自動同期(autoUpdateHumanBones)を無効化しない
+    // (他のボーンのnormalized→raw同期は通常通り機能させる)。
+    const head = humanoid.getRawBoneNode("head");
+    if (!head) return;
+    head.rotation.x += this._headCurrentX;
+    head.rotation.y += this._headCurrentY;
   }
 
   /**
@@ -629,8 +691,9 @@ export class VrmViewer {
         }
       }
       this.vrm.scene.rotation.y = sway * 0.05;
-      this._animateIdleBody(this.vrm, nowMs);
+      this._animateIdleBody(this.vrm, nowMs, delta);
       this.vrm.update(delta); // lookAt(視線追従)・springBoneなどもここで更新される
+      this._applyHeadFidget(this.vrm);
     } else if (this.placeholder) {
       this.placeholder.rotation.y = sway * 0.15;
       if (this.placeholderMouth) {
