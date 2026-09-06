@@ -290,8 +290,12 @@ export class VrmViewer {
     this._hipsBasePosition = hipsNode ? hipsNode.position.clone() : null;
   }
 
-  /** 指定した時間(ミリ秒、既定8秒)だけダンスモーションを再生する */
-  startDance(durationMs = 8000) {
+  /**
+   * 指定したスタイルの動きを、指定した時間(ミリ秒、既定8秒)だけ再生する。
+   * @param {"wave"|"shadowbox"|"ballet"} style
+   */
+  startDance(style = "wave", durationMs = 8000) {
+    this._danceStyle = style;
     this._danceStartTime = performance.now();
     this._danceDurationMs = durationMs;
   }
@@ -329,7 +333,13 @@ export class VrmViewer {
     const t = nowMs / 1000;
 
     if (this.isDancing) {
-      this._animateDance(humanoid, base, t);
+      if (this._danceStyle === "shadowbox") {
+        this._animateShadowbox(humanoid, base, t);
+      } else if (this._danceStyle === "ballet") {
+        this._animateBallet(humanoid, base, t);
+      } else {
+        this._animateDance(humanoid, base, t);
+      }
       this._animateFingerWiggle(humanoid, base, t);
       return;
     }
@@ -475,6 +485,108 @@ export class VrmViewer {
     if (hips && this._hipsBasePosition) {
       hips.position.x = this._hipsBasePosition.x + (stepR - stepL) * 0.03;
     }
+  }
+
+  /**
+   * シャドーボクシング風の動き。速いテンポで、腕を交互に伸ばして(肘を伸ばして
+   * パンチを打つように)構え⇔突き出しを繰り返し、細かいフットワークと
+   * ヘッドスリップ(頭の小さな揺れ)を組み合わせる。
+   */
+  _animateShadowbox(humanoid, base, t) {
+    const beat = t * 4.2;
+
+    const hips = humanoid.getNormalizedBoneNode("hips");
+    if (hips) {
+      if (this._hipsBasePosition) {
+        hips.position.y = this._hipsBasePosition.y - 0.02 + Math.abs(Math.sin(beat)) * 0.02;
+      }
+      if (base.hips) hips.rotation.y = Math.sin(beat * 0.5) * 0.12;
+    }
+
+    const spine = humanoid.getNormalizedBoneNode("spine");
+    if (spine && base.spine) spine.rotation.y = Math.sin(beat * 0.5 + Math.PI) * 0.1;
+
+    const neck = humanoid.getNormalizedBoneNode("neck");
+    if (neck && base.neck) {
+      neck.rotation.z = base.neck.z + Math.sin(beat * 0.7) * 0.1; // ヘッドスリップ
+      neck.rotation.x = base.neck.x + Math.sin(beat * 1.4) * 0.04;
+    }
+
+    // 交互にパンチ(構え=肘を曲げた状態 ⇔ 突き出し=肘を伸ばした状態)
+    const punchL = Math.max(0, Math.sin(beat));
+    const punchR = Math.max(0, Math.sin(beat + Math.PI));
+    const guardDeg = (Math.PI / 180) * 35;
+    const raiseDeg = (Math.PI / 180) * 40;
+
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    if (leftUpperArm && base.leftUpperArm) leftUpperArm.rotation.z = base.leftUpperArm.z + raiseDeg;
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - raiseDeg;
+
+    // 肘: 構え(大きく曲げる)からパンチ(伸ばす)へ。0未満にはしない(逆関節防止)
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + guardDeg * (1 - punchL);
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + guardDeg * (1 - punchR);
+
+    // 細かいフットワーク
+    const stepL = Math.max(0, Math.sin(beat * 0.5));
+    const stepR = Math.max(0, Math.sin(beat * 0.5 + Math.PI));
+    const leftUpperLeg = humanoid.getNormalizedBoneNode("leftUpperLeg");
+    if (leftUpperLeg) leftUpperLeg.rotation.x = -stepL * 0.12;
+    const rightUpperLeg = humanoid.getNormalizedBoneNode("rightUpperLeg");
+    if (rightUpperLeg) rightUpperLeg.rotation.x = -stepR * 0.12;
+    const leftLowerLeg = humanoid.getNormalizedBoneNode("leftLowerLeg");
+    if (leftLowerLeg) leftLowerLeg.rotation.x = 0.15 + stepL * 0.15;
+    const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
+    if (rightLowerLeg) rightLowerLeg.rotation.x = 0.15 + stepR * 0.15;
+  }
+
+  /**
+   * バレエ風の、ゆったりと大きな腕の動き(ポール・ド・ブラ風)と、
+   * 片足をゆっくり持ち上げて静止する動き(アラベスク風)を組み合わせた
+   * 優雅でゆっくりとしたモーション。
+   */
+  _animateBallet(humanoid, base, t) {
+    const beat = t * 0.7; // ゆったりとしたテンポ
+
+    const hips = humanoid.getNormalizedBoneNode("hips");
+    if (hips && base.hips) hips.rotation.z = base.hips.z + Math.sin(beat) * 0.05;
+
+    const spine = humanoid.getNormalizedBoneNode("spine");
+    if (spine && base.spine) spine.rotation.y = Math.sin(beat * 0.6 + 0.5) * 0.18;
+
+    const neck = humanoid.getNormalizedBoneNode("neck");
+    if (neck && base.neck) {
+      neck.rotation.z = base.neck.z + Math.sin(beat + 1) * 0.1;
+      neck.rotation.x = base.neck.x - 0.03;
+    }
+
+    // 腕をゆっくり大きく、弧を描くように動かす(0〜1の滑らかな波)
+    const armWave = Math.sin(beat) * 0.5 + 0.5;
+    const upDeg = (Math.PI / 180) * 95;
+
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    if (leftUpperArm && base.leftUpperArm) leftUpperArm.rotation.z = base.leftUpperArm.z + armWave * upDeg;
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    if (rightUpperArm && base.rightUpperArm) {
+      rightUpperArm.rotation.z = base.rightUpperArm.z - (1 - armWave) * upDeg;
+    }
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + 0.1;
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 0.1;
+
+    // 片足をゆっくり持ち上げて静止する(アラベスク風)。左右をゆっくり入れ替える
+    const legPhase = Math.sin(beat * 0.5) * 0.5 + 0.5; // 0〜1、片方が上がっている間もう片方は下りている
+    const leftUpperLeg = humanoid.getNormalizedBoneNode("leftUpperLeg");
+    if (leftUpperLeg) leftUpperLeg.rotation.x = legPhase * 0.5;
+    const rightUpperLeg = humanoid.getNormalizedBoneNode("rightUpperLeg");
+    if (rightUpperLeg) rightUpperLeg.rotation.x = -(1 - legPhase) * 0.5;
+    const leftLowerLeg = humanoid.getNormalizedBoneNode("leftLowerLeg");
+    if (leftLowerLeg) leftLowerLeg.rotation.x = legPhase * 0.15;
+    const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
+    if (rightLowerLeg) rightLowerLeg.rotation.x = (1 - legPhase) * 0.15;
   }
 
   _tick() {
