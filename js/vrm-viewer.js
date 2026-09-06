@@ -198,19 +198,34 @@ export class VrmViewer {
     if (!humanoid) return;
 
     const deg = (d) => (d * Math.PI) / 180;
+    const setZ = (name, degrees) => {
+      const node = humanoid.getNormalizedBoneNode(name);
+      if (node) node.rotation.z = deg(degrees);
+    };
 
     // Tポーズから腕を下ろす(上腕を70度、前腕をさらに10度、体側へ回転させる)
     // ※符号は実機確認の結果、上に上がる向きだったため反転させている
-    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
-    if (leftUpperArm) leftUpperArm.rotation.z = deg(-70);
-    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
-    if (rightUpperArm) rightUpperArm.rotation.z = deg(70);
-    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
-    if (leftLowerArm) leftLowerArm.rotation.z = deg(-10);
-    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
-    if (rightLowerArm) rightLowerArm.rotation.z = deg(10);
+    setZ("leftUpperArm", -70);
+    setZ("rightUpperArm", 70);
+    setZ("leftLowerArm", -10);
+    setZ("rightLowerArm", 10);
 
-    // hips/spine/neckはTポーズのままでも見た目に違和感がないため触らない
+    // 指をまっすぐ伸ばしたままだと不自然なので、軽く曲げて自然な手の形にする
+    // (これは実機未確認のため、曲がる向きが逆の場合は符号を反転させる想定)
+    for (const side of ["left", "right"]) {
+      const sign = side === "left" ? -1 : 1;
+      setZ(`${side}ThumbProximal`, sign * 10);
+      setZ(`${side}ThumbDistal`, sign * 10);
+      for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+        setZ(`${side}${finger}Proximal`, sign * 16);
+        setZ(`${side}${finger}Intermediate`, sign * 14);
+        setZ(`${side}${finger}Distal`, sign * 10);
+      }
+    }
+
+    // 待機モーションで動かすボーンの基準角度(=上で作った「休め」姿勢)を保存する。
+    // hips/spine/neckはTポーズのままでも見た目に違和感がないため角度は変えず、
+    // 基準角度(0)だけ記録する。
     const boneNames = [
       "hips",
       "spine",
@@ -221,6 +236,19 @@ export class VrmViewer {
       "rightLowerArm",
     ];
     for (const name of boneNames) {
+      const node = humanoid.getNormalizedBoneNode(name);
+      if (node) this._boneBaseRotations[name] = node.rotation.clone();
+    }
+
+    // 指も同様に基準角度を保存し、待機モーションでごく小さく動かせるようにする
+    this._fingerBoneNames = [];
+    for (const side of ["left", "right"]) {
+      this._fingerBoneNames.push(`${side}ThumbProximal`, `${side}ThumbDistal`);
+      for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+        this._fingerBoneNames.push(`${side}${finger}Proximal`, `${side}${finger}Intermediate`, `${side}${finger}Distal`);
+      }
+    }
+    for (const name of this._fingerBoneNames) {
       const node = humanoid.getNormalizedBoneNode(name);
       if (node) this._boneBaseRotations[name] = node.rotation.clone();
     }
@@ -261,33 +289,45 @@ export class VrmViewer {
     const micro = Math.sin(t * 1.7 + 2.0) * 0.4 + Math.sin(t * 2.9 + 0.4) * 0.3;
 
     const hips = humanoid.getNormalizedBoneNode("hips");
-    if (hips && base.hips) hips.rotation.z = base.hips.z + breathe * 0.025;
+    if (hips && base.hips) hips.rotation.z = base.hips.z + breathe * 0.04;
 
     const spine = humanoid.getNormalizedBoneNode("spine");
-    if (spine && base.spine) spine.rotation.z = base.spine.z - breathe * 0.02 + micro * 0.005;
+    if (spine && base.spine) spine.rotation.z = base.spine.z - breathe * 0.035 + micro * 0.01;
 
     const neck = humanoid.getNormalizedBoneNode("neck");
     if (neck && base.neck) {
-      neck.rotation.z = base.neck.z + micro * 0.015;
-      neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.015;
+      neck.rotation.z = base.neck.z + micro * 0.02;
+      neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.02;
     }
 
+    // 腕は「はっきり動いている」と分かるくらいの大きさで常時揺らす
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
     if (leftUpperArm && base.leftUpperArm) {
-      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.02 + micro * 0.015;
+      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
     if (rightUpperArm && base.rightUpperArm) {
-      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.02 - micro * 0.015;
+      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
     if (leftLowerArm && base.leftLowerArm) {
-      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.03;
+      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08;
     }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
-      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.03;
+      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08;
+    }
+
+    // 指にもごく小さな揺れを足して、完全に固まって見えないようにする
+    if (this._fingerBoneNames) {
+      const fingerWiggle = Math.sin(t * 1.3) * 0.03 + Math.sin(t * 2.1 + 1.0) * 0.02;
+      for (const name of this._fingerBoneNames) {
+        const node = humanoid.getNormalizedBoneNode(name);
+        if (node && base[name] !== undefined) {
+          node.rotation.z = base[name].z + fingerWiggle;
+        }
+      }
     }
   }
 
