@@ -240,6 +240,7 @@ async function startCamera() {
   try {
     await state.camera.start(els.cameraDeviceSelect.value || undefined);
     state.cameraOn = true;
+    els.cameraVideo.hidden = false;
     els.btnCameraToggle.classList.add("is-active");
     els.btnCameraToggle.textContent = "📷 カメラ ON";
     await refreshCameraDeviceList(); // ラベル権限が付与された後に再取得
@@ -251,6 +252,7 @@ async function startCamera() {
 function stopCamera() {
   state.camera.stop();
   state.cameraOn = false;
+  els.cameraVideo.hidden = true;
   els.btnCameraToggle.classList.remove("is-active");
   els.btnCameraToggle.textContent = "📷 カメラ OFF";
 }
