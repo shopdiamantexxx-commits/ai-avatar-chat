@@ -300,23 +300,28 @@ export class VrmViewer {
       neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.02;
     }
 
+    // 話している間は、常時の揺れに加えて腕の身振り手振りを上乗せする
+    const talk = this.mouthCurrent;
+    const gestureL = Math.sin(t * 3.2) * 0.14 + Math.sin(t * 5.3 + 1.0) * 0.08;
+    const gestureR = Math.sin(t * 3.2 + 1.1) * 0.14 + Math.sin(t * 5.3 + 2.0) * 0.08;
+
     // 腕は「はっきり動いている」と分かるくらいの大きさで常時揺らす
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
     if (leftUpperArm && base.leftUpperArm) {
-      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05;
+      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05 + gestureL * talk;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
     if (rightUpperArm && base.rightUpperArm) {
-      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05;
+      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05 - gestureR * talk;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
     if (leftLowerArm && base.leftLowerArm) {
-      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08;
+      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08 + Math.sin(t * 4.1) * 0.16 * talk;
     }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
-      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08;
+      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + Math.sin(t * 4.1 + 0.6) * 0.16 * talk;
     }
 
     // 指にもごく小さな揺れを足して、完全に固まって見えないようにする
