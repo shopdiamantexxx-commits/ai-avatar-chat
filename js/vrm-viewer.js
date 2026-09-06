@@ -68,7 +68,11 @@ export class VrmViewer {
     const parent = canvas.parentElement;
     const w = parent ? parent.clientWidth : window.innerWidth;
     const h = parent ? parent.clientHeight : window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    // 第3引数はupdateStyle。trueにしてcanvasのCSS表示サイズ(style.width/height)を
+    // 明示的に固定する。falseのままだと、height:100%が親要素の高さ不定により解決できず、
+    // canvasの実解像度(devicePixelRatio倍)が逆に親の高さ計算に影響する循環参照が起き、
+    // リサイズのたびにキャラクター表示が縦に伸び続ける不具合が発生する。
+    this.renderer.setSize(w, h, true);
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
   }
