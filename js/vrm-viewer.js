@@ -52,8 +52,6 @@ export class VrmViewer {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-    this.camera.position.set(0, 1.35, 1.6);
-    this.camera.lookAt(0, 1.3, 0);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
     keyLight.position.set(1, 2, 1.5);
@@ -62,11 +60,51 @@ export class VrmViewer {
     this.scene.add(ambient);
 
     this._addPlaceholder();
+    this._frameCharacter(1.6, 0.9); // プレースホルダー用の暫定フレーミング(全身が入る距離)
     this.clock = new THREE.Clock();
     this._ready = true;
     this._resize();
     window.addEventListener("resize", () => this._resize());
+    canvas.addEventListener("wheel", (e) => this._onWheelZoom(e), { passive: false });
     this._tick();
+  }
+
+  /**
+   * カメラの注視点(lookAtY、だいたい腰の高さ)と、全身がちょうど収まる距離を
+   * 計算してセットする。以後はマウスホイールでこの距離を前後させてズームする。
+   * @param {number} headTopY 頭のてっぺんのおおよその高さ(m)
+   * @param {number} lookAtY  注視点の高さ(m。腰の高さを想定)
+   */
+  _frameCharacter(headTopY, lookAtY) {
+    const margin = 0.15;
+    const visibleHeight = headTopY + margin;
+    const halfFovRad = ((this.camera.fov || 30) / 2) * (Math.PI / 180);
+    const fullBodyDistance = visibleHeight / (2 * Math.tan(halfFovRad));
+
+    this._lookAtY = lookAtY;
+    this._cameraDistance = fullBodyDistance;
+    this._minCameraDistance = 0.4;
+    this._maxCameraDistance = fullBodyDistance * 2.2;
+    this._updateCameraPosition();
+  }
+
+  _updateCameraPosition() {
+    if (this._lookAtY === undefined) return;
+    this.camera.position.set(0, this._lookAtY, this._cameraDistance);
+    this.camera.lookAt(0, this._lookAtY, 0);
+  }
+
+  /** マウスホイールでカメラを前後させて拡大縮小する */
+  _onWheelZoom(e) {
+    if (this._cameraDistance === undefined) return;
+    e.preventDefault();
+    // 距離が近いほど細かく、遠いほど大きくズームできるようにする
+    const delta = e.deltaY * 0.0015 * this._cameraDistance;
+    this._cameraDistance = Math.max(
+      this._minCameraDistance,
+      Math.min(this._maxCameraDistance, this._cameraDistance + delta)
+    );
+    this._updateCameraPosition();
   }
 
   _resize() {
@@ -172,11 +210,12 @@ export class VrmViewer {
     this.scene.add(vrm.scene);
     this.vrm = vrm;
 
-    // カメラをキャラクターの頭部あたりに合わせる
+    // 全身が入る距離にカメラを合わせる(ホイールでズームイン/アウト可能)
     const headNode = vrm.humanoid?.getNormalizedBoneNode("head");
+    const hipsNode = vrm.humanoid?.getNormalizedBoneNode("hips");
     const headY = headNode ? headNode.getWorldPosition(new THREE.Vector3()).y : 1.4;
-    this.camera.position.set(0, headY - 0.05, 1.5);
-    this.camera.lookAt(0, headY - 0.1, 0);
+    const hipsY = hipsNode ? hipsNode.getWorldPosition(new THREE.Vector3()).y : 0.9;
+    this._frameCharacter(headY + 0.2, hipsY);
 
     // カメラ(=画面を見ているユーザー側)へ視線・顔がゆるやかに追従するようにする
     if (vrm.lookAt) {
@@ -323,28 +362,35 @@ export class VrmViewer {
       neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.02;
     }
 
-    // 話している間は、常時の揺れに加えて腕の身振り手振りを上乗せする
+    // 話している間は、常時の揺れに加えて腕の身振り手振りを上乗せする。
+    // 実際の人間の身振りは左右対称でも一定のリズムでもないため、
+    // 左右で周期をずらし、さらに「強弱」がゆっくり変化する波を掛けることで
+    // 単調な繰り返しに見えないようにする。肘の曲げ伸ばし(前腕側)を
+    // 大きめにして、話しながら手を動かしている感じを強調する。
     const talk = this.mouthCurrent;
-    const gestureL = Math.sin(t * 3.2) * 0.14 + Math.sin(t * 5.3 + 1.0) * 0.08;
-    const gestureR = Math.sin(t * 3.2 + 1.1) * 0.14 + Math.sin(t * 5.3 + 2.0) * 0.08;
+    const emphasis = 0.55 + 0.45 * (Math.sin(t * 0.9) * 0.5 + 0.5);
+    const gestureL = Math.sin(t * 2.6) * 0.16 + Math.sin(t * 4.1 + 0.5) * 0.1 + Math.sin(t * 0.7) * 0.05;
+    const gestureR = Math.sin(t * 3.1 + 1.7) * 0.14 + Math.sin(t * 4.8 + 2.3) * 0.08;
+    const elbowL = Math.sin(t * 2.2 + 0.3) * 0.28 + Math.sin(t * 3.7) * 0.14;
+    const elbowR = Math.sin(t * 2.5 + 1.1) * 0.26 + Math.sin(t * 3.9 + 0.8) * 0.13;
 
     // 腕は「はっきり動いている」と分かるくらいの大きさで常時揺らす
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
     if (leftUpperArm && base.leftUpperArm) {
-      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05 + gestureL * talk;
+      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05 + gestureL * talk * emphasis;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
     if (rightUpperArm && base.rightUpperArm) {
-      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05 - gestureR * talk;
+      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05 - gestureR * talk * emphasis;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
     if (leftLowerArm && base.leftLowerArm) {
-      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08 + Math.sin(t * 4.1) * 0.16 * talk;
+      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08 + elbowL * talk * emphasis;
     }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
-      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + Math.sin(t * 4.1 + 0.6) * 0.16 * talk;
+      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + elbowR * talk * emphasis;
     }
 
     this._animateFingerWiggle(humanoid, base, t);
