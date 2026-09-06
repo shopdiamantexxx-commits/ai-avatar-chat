@@ -33,6 +33,7 @@ export class VrmViewer {
     this.blinkDurationMs = 140;
     this.mouthTarget = 0;
     this.mouthCurrent = 0;
+    this._boneBaseRotations = null;
     this._ready = false;
     this._raf = null;
   }
@@ -178,6 +179,34 @@ export class VrmViewer {
     if (vrm.lookAt) {
       vrm.lookAt.target = this.camera;
     }
+
+    this._captureBoneBaseRotations(vrm);
+  }
+
+  /**
+   * 待機モーションで動かすボーンの「読み込み直後の角度」を控えておく。
+   * 正規化ボーン(getNormalizedBoneNode)は回転ゼロがTポーズを表すため、
+   * ここを基準にせず絶対値で角度を上書きすると、腕がTの字に開くなど
+   * モデル本来のポーズ(腕を下ろした状態など)が壊れてしまう。
+   * 必ず「元の角度+揺れ」の形で動かすため、元の角度をここで保存する。
+   */
+  _captureBoneBaseRotations(vrm) {
+    this._boneBaseRotations = {};
+    const humanoid = vrm.humanoid;
+    if (!humanoid) return;
+    const boneNames = [
+      "hips",
+      "spine",
+      "neck",
+      "leftUpperArm",
+      "rightUpperArm",
+      "leftLowerArm",
+      "rightLowerArm",
+    ];
+    for (const name of boneNames) {
+      const node = humanoid.getNormalizedBoneNode(name);
+      if (node) this._boneBaseRotations[name] = node.rotation.clone();
+    }
   }
 
   async unloadVrm() {
@@ -186,6 +215,7 @@ export class VrmViewer {
       VRMUtils.deepDispose(this.vrm.scene);
       this.vrm = null;
     }
+    this._boneBaseRotations = null;
     if (!this.placeholder) this._addPlaceholder();
   }
 
@@ -203,34 +233,39 @@ export class VrmViewer {
    */
   _animateIdleBody(vrm, nowMs) {
     const humanoid = vrm.humanoid;
-    if (!humanoid) return;
+    const base = this._boneBaseRotations;
+    if (!humanoid || !base) return;
     const t = nowMs / 1000;
 
     const hips = humanoid.getNormalizedBoneNode("hips");
-    if (hips) hips.rotation.z = Math.sin(t * 0.6) * 0.02;
+    if (hips && base.hips) hips.rotation.z = base.hips.z + Math.sin(t * 0.6) * 0.02;
 
     const spine = humanoid.getNormalizedBoneNode("spine");
-    if (spine) spine.rotation.z = Math.sin(t * 0.6 + Math.PI) * 0.015;
+    if (spine && base.spine) spine.rotation.z = base.spine.z + Math.sin(t * 0.6 + Math.PI) * 0.015;
 
     const neck = humanoid.getNormalizedBoneNode("neck");
-    if (neck) neck.rotation.z = Math.sin(t * 0.5) * 0.01;
+    if (neck && base.neck) neck.rotation.z = base.neck.z + Math.sin(t * 0.5) * 0.01;
 
     // 話している(口パク中)ときだけ、腕にもゆるい身振り手振り風の動きを足す
     const gesture = this.mouthCurrent;
 
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
-    if (leftUpperArm) {
-      leftUpperArm.rotation.z = 0.05 + Math.sin(t * 0.7) * 0.02 + Math.sin(t * 3.1) * 0.06 * gesture;
+    if (leftUpperArm && base.leftUpperArm) {
+      leftUpperArm.rotation.z = base.leftUpperArm.z + Math.sin(t * 0.7) * 0.02 + Math.sin(t * 3.1) * 0.06 * gesture;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
-    if (rightUpperArm) {
-      rightUpperArm.rotation.z = -(0.05 + Math.sin(t * 0.7 + Math.PI) * 0.02 + Math.sin(t * 3.1 + 1.3) * 0.06 * gesture);
+    if (rightUpperArm && base.rightUpperArm) {
+      rightUpperArm.rotation.z = base.rightUpperArm.z + Math.sin(t * 0.7 + Math.PI) * 0.02 + Math.sin(t * 3.1 + 1.3) * 0.06 * gesture;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
-    if (leftLowerArm) leftLowerArm.rotation.x = Math.sin(t * 3.4) * 0.09 * gesture;
+    if (leftLowerArm && base.leftLowerArm) {
+      leftLowerArm.rotation.x = base.leftLowerArm.x + Math.sin(t * 3.4) * 0.09 * gesture;
+    }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
-    if (rightLowerArm) rightLowerArm.rotation.x = Math.sin(t * 3.4 + 0.7) * 0.09 * gesture;
+    if (rightLowerArm && base.rightLowerArm) {
+      rightLowerArm.rotation.x = base.rightLowerArm.x + Math.sin(t * 3.4 + 0.7) * 0.09 * gesture;
+    }
   }
 
   _tick() {
