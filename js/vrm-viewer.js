@@ -384,30 +384,32 @@ export class VrmViewer {
     }
 
     // 立っているときも完全な棒立ちにならないよう、膝のわずかな屈伸と
-    // 体重の左右移動を常時加える(ダンスで使ったのと同じ脚のボーン・技法を、
-    // ごく小さな振れ幅で待機モーションにも適用する)。
-    const weightShift = Math.sin(t * 0.35 + 0.6); // -1〜1、ゆっくり左右の重心が入れ替わる
-    const kneeBend = 0.03 + Math.max(0, Math.sin(t * 0.6)) * 0.02; // 常時ごくわずかに曲がっている
+    // 体重の左右移動を常時加える(ダンスで使ったのと同じ脚のボーン・技法を
+    // 待機モーションにも適用する)。前回の振れ幅・速さでは弱すぎて
+    // 「あまり違いがない」と感じられたため、振れ幅を約2倍、周期も
+    // 約2.5倍速く(18秒→7秒程度)して、はっきり分かるようにした。
+    const weightShift = Math.sin(t * 0.9 + 0.6); // -1〜1、7秒程度の周期で左右の重心が入れ替わる
+    const kneeBend = 0.05 + Math.max(0, Math.sin(t * 1.2)) * 0.04; // 常時はっきり曲がっている
 
     const leftUpperLeg = humanoid.getNormalizedBoneNode("leftUpperLeg");
-    if (leftUpperLeg) leftUpperLeg.rotation.x = -Math.max(0, -weightShift) * 0.04;
+    if (leftUpperLeg) leftUpperLeg.rotation.x = -Math.max(0, -weightShift) * 0.09;
     const rightUpperLeg = humanoid.getNormalizedBoneNode("rightUpperLeg");
-    if (rightUpperLeg) rightUpperLeg.rotation.x = -Math.max(0, weightShift) * 0.04;
+    if (rightUpperLeg) rightUpperLeg.rotation.x = -Math.max(0, weightShift) * 0.09;
 
     const leftLowerLeg = humanoid.getNormalizedBoneNode("leftLowerLeg");
-    if (leftLowerLeg) leftLowerLeg.rotation.x = kneeBend + Math.max(0, -weightShift) * 0.03;
+    if (leftLowerLeg) leftLowerLeg.rotation.x = kneeBend + Math.max(0, -weightShift) * 0.07;
     const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
-    if (rightLowerLeg) rightLowerLeg.rotation.x = kneeBend + Math.max(0, weightShift) * 0.03;
+    if (rightLowerLeg) rightLowerLeg.rotation.x = kneeBend + Math.max(0, weightShift) * 0.07;
 
     if (hips && this._hipsBasePosition) {
-      hips.position.x = this._hipsBasePosition.x + weightShift * 0.015;
+      hips.position.x = this._hipsBasePosition.x + weightShift * 0.03;
     }
 
-    // 手首にもごく小さな揺れを足す(これまで未使用だったボーン)
+    // 手首にも揺れを足す(これまで未使用だったボーン)
     const leftHand = humanoid.getNormalizedBoneNode("leftHand");
-    if (leftHand) leftHand.rotation.z = Math.sin(t * 0.9 + 1.2) * 0.05;
+    if (leftHand) leftHand.rotation.z = Math.sin(t * 0.9 + 1.2) * 0.09;
     const rightHand = humanoid.getNormalizedBoneNode("rightHand");
-    if (rightHand) rightHand.rotation.z = Math.sin(t * 0.9 + 2.4) * 0.05;
+    if (rightHand) rightHand.rotation.z = Math.sin(t * 0.9 + 2.4) * 0.09;
 
     // 頭の細かい動きの目標角度だけここで更新しておく(実際にボーンへ反映するのは
     // 視線追従(lookAt)と競合しないよう vrm.update() の後、_tick()側で行う)。
