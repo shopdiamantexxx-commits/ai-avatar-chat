@@ -194,6 +194,45 @@ export class VrmViewer {
     this.mouthTarget = Math.max(0, Math.min(1, level));
   }
 
+  /**
+   * 腰・肩・腕に、呼吸に合わせた微妙な重心の揺れと、発話中のゆるい身振り手振りを
+   * 加える。VRMのhumanoidボーンを直接動かすため、モデルが人型ボーン構成
+   * (hips/spine/upperArmなど)を持っていない場合は何もしない。
+   * ここでは毎フレーム「絶対値」で角度を代入している(前回値に加算しない)ので、
+   * 値が際限なく大きくなっていく心配はない。
+   */
+  _animateIdleBody(vrm, nowMs) {
+    const humanoid = vrm.humanoid;
+    if (!humanoid) return;
+    const t = nowMs / 1000;
+
+    const hips = humanoid.getNormalizedBoneNode("hips");
+    if (hips) hips.rotation.z = Math.sin(t * 0.6) * 0.02;
+
+    const spine = humanoid.getNormalizedBoneNode("spine");
+    if (spine) spine.rotation.z = Math.sin(t * 0.6 + Math.PI) * 0.015;
+
+    const neck = humanoid.getNormalizedBoneNode("neck");
+    if (neck) neck.rotation.z = Math.sin(t * 0.5) * 0.01;
+
+    // 話している(口パク中)ときだけ、腕にもゆるい身振り手振り風の動きを足す
+    const gesture = this.mouthCurrent;
+
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    if (leftUpperArm) {
+      leftUpperArm.rotation.z = 0.05 + Math.sin(t * 0.7) * 0.02 + Math.sin(t * 3.1) * 0.06 * gesture;
+    }
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    if (rightUpperArm) {
+      rightUpperArm.rotation.z = -(0.05 + Math.sin(t * 0.7 + Math.PI) * 0.02 + Math.sin(t * 3.1 + 1.3) * 0.06 * gesture);
+    }
+
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    if (leftLowerArm) leftLowerArm.rotation.x = Math.sin(t * 3.4) * 0.09 * gesture;
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    if (rightLowerArm) rightLowerArm.rotation.x = Math.sin(t * 3.4 + 0.7) * 0.09 * gesture;
+  }
+
   _tick() {
     this._raf = requestAnimationFrame(() => this._tick());
     const delta = this.clock.getDelta();
@@ -234,6 +273,7 @@ export class VrmViewer {
         }
       }
       this.vrm.scene.rotation.y = sway * 0.05;
+      this._animateIdleBody(this.vrm, nowMs);
       this.vrm.update(delta); // lookAt(視線追従)・springBoneなどもここで更新される
     } else if (this.placeholder) {
       this.placeholder.rotation.y = sway * 0.15;
