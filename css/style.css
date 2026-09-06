@@ -357,3 +357,23 @@ h1, h2, h3 {
   color: var(--color-text-muted);
 }
 .diary-empty { font-style: italic; }
+
+/* [検証用/Phase 0] toolCall受信確認用の一時的な表示欄。確認が終わったら削除してよい。 */
+.debug-toolcall {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 10px 14px;
+  background: #0a1f14;
+  border: 2px solid #2ecc71;
+  border-radius: 10px;
+  color: #7CFFB2;
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  z-index: 999;
+}

@@ -42,6 +42,7 @@ const els = {
   vrmFileInput: $("vrm-file-input"),
   btnClearVrm: $("btn-clear-vrm"),
   vrmStatusText: $("vrm-status-text"),
+  debugToolcall: $("debug-toolcall"), // [検証用/Phase 0]
 };
 
 const state = {
@@ -396,6 +397,17 @@ async function startSession() {
   client.addEventListener("interrupted", () => {
     clearPlayback();
     finalizePendingOutputLine();
+  });
+  // [検証用/Phase 0] DevToolsを開かなくても確認できるよう、toolCall受信内容を
+  // 画面左下に直接表示する。確認が終わったらこのブロックごと削除してよい。
+  client.addEventListener("toolCall", (e) => {
+    const time = new Date().toLocaleTimeString("ja-JP");
+    const calls = (e.detail.functionCalls || [])
+      .map((c) => `${c.name}(${JSON.stringify(c.args)})`)
+      .join("\n");
+    if (els.debugToolcall) {
+      els.debugToolcall.textContent = `[${time}] toolCall受信:\n${calls || JSON.stringify(e.detail)}`;
+    }
   });
   client.addEventListener("error", (e) => {
     console.error("Gemini Liveエラー:", e.detail);
