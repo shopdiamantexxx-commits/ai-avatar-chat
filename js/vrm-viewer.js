@@ -29,6 +29,8 @@ export class VrmViewer {
     this.clock = null;
     this.blinkTimer = 0;
     this.nextBlinkAt = 2 + Math.random() * 3;
+    this.blinkStartTime = null;
+    this.blinkDurationMs = 140;
     this.mouthTarget = 0;
     this.mouthCurrent = 0;
     this._ready = false;
@@ -171,6 +173,11 @@ export class VrmViewer {
     const headY = headNode ? headNode.getWorldPosition(new THREE.Vector3()).y : 1.4;
     this.camera.position.set(0, headY - 0.05, 1.5);
     this.camera.lookAt(0, headY - 0.1, 0);
+
+    // カメラ(=画面を見ているユーザー側)へ視線・顔がゆるやかに追従するようにする
+    if (vrm.lookAt) {
+      vrm.lookAt.target = this.camera;
+    }
   }
 
   async unloadVrm() {
@@ -190,48 +197,56 @@ export class VrmViewer {
   _tick() {
     this._raf = requestAnimationFrame(() => this._tick());
     const delta = this.clock.getDelta();
+    const nowMs = performance.now();
 
     // 口パクをなめらかに追従させる
     this.mouthCurrent += (this.mouthTarget - this.mouthCurrent) * Math.min(1, delta * 12);
+
+    // まばたき(VRM・プレースホルダー共通のタイマー)。一定のランダムな間隔で
+    // blinkStartTimeをセットし、そこから経過時間で開閉の三角波を作る。
+    this.blinkTimer += delta;
+    if (this.blinkTimer >= this.nextBlinkAt) {
+      this.blinkTimer = 0;
+      this.nextBlinkAt = 2.5 + Math.random() * 3;
+      this.blinkStartTime = nowMs;
+    }
+    let blinkValue = 0;
+    if (this.blinkStartTime !== null) {
+      const t = (nowMs - this.blinkStartTime) / this.blinkDurationMs;
+      if (t >= 1) {
+        this.blinkStartTime = null;
+      } else {
+        blinkValue = t < 0.5 ? t * 2 : (1 - t) * 2;
+      }
+    }
+
+    // 呼吸のような、ごく微妙な左右の揺れ
+    const sway = Math.sin(nowMs / 3000);
 
     if (this.vrm) {
       const em = this.vrm.expressionManager;
       if (em) {
         try {
           em.setValue("aa", this.mouthCurrent);
+          em.setValue("blink", blinkValue);
         } catch {
           /* この表情キーを持たないモデルの場合は無視 */
         }
       }
-      this.vrm.update(delta);
+      this.vrm.scene.rotation.y = sway * 0.05;
+      this.vrm.update(delta); // lookAt(視線追従)・springBoneなどもここで更新される
     } else if (this.placeholder) {
-      this.placeholder.rotation.y = Math.sin(performance.now() / 3000) * 0.15;
+      this.placeholder.rotation.y = sway * 0.15;
       if (this.placeholderMouth) {
         this.placeholderMouth.scale.y = 1 + this.mouthCurrent * 6;
       }
-      this.blinkTimer += delta;
-      if (this.blinkTimer >= this.nextBlinkAt) {
-        this.blinkTimer = 0;
-        this.nextBlinkAt = 2.5 + Math.random() * 3;
-        this._blinkPlaceholder();
+      if (this.placeholderEyes) {
+        const closed = Math.max(0.05, 1 - blinkValue);
+        for (const eye of this.placeholderEyes) eye.scale.y = closed * this._eyeBaseScale.y;
       }
     }
 
     this.renderer.render(this.scene, this.camera);
-  }
-
-  _blinkPlaceholder() {
-    if (!this.placeholderEyes) return;
-    const eyes = this.placeholderEyes;
-    const start = performance.now();
-    const duration = 140;
-    const anim = () => {
-      const t = Math.min(1, (performance.now() - start) / duration);
-      const s = t < 0.5 ? 1 - t * 2 : (t - 0.5) * 2;
-      for (const eye of eyes) eye.scale.y = Math.max(0.05, s) * this._eyeBaseScale.y;
-      if (t < 1) requestAnimationFrame(anim);
-    };
-    anim();
   }
 
   dispose() {
