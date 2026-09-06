@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ゼタ – AIキャラクター対話</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.3/lib/three-vrm.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div class="app">
+  <header class="app__header">
+    <h1>ゼタ <span class="app__subtitle">AIキャラクター対話(プロトタイプ)</span></h1>
+    <div class="app__header-actions">
+      <span class="status-badge" id="status-badge" data-state="idle">
+        <span class="status-badge__dot"></span>
+        <span id="status-text">待機中</span>
+      </span>
+      <button class="btn btn--secondary" id="btn-open-settings" type="button">⚙ 設定</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="stage__viewer">
+      <canvas id="vrm-canvas"></canvas>
+      <video id="camera-video" class="camera-preview" playsinline muted></video>
+      <div class="mic-level" id="mic-level" aria-hidden="true"></div>
+    </div>
+
+    <aside class="stage__panel">
+      <div class="controls">
+        <button class="btn btn--primary btn--big" id="btn-toggle-session" type="button">🎙 会話を始める</button>
+        <div class="controls__row">
+          <button class="btn btn--secondary" id="btn-camera-toggle" type="button">📷 カメラ OFF</button>
+          <select id="camera-device-select" class="select" title="カメラを選択(OBS仮想カメラなどもここから選べます)"></select>
+        </div>
+      </div>
+
+      <section class="transcript">
+        <h2 class="transcript__heading">会話ログ</h2>
+        <div class="transcript__log" id="transcript-log"></div>
+        <form class="transcript__input" id="text-form" onsubmit="return false;">
+          <textarea id="text-input" rows="1" placeholder="テキストでも話しかけられます(Enterで送信)"></textarea>
+          <button class="btn btn--secondary" id="btn-send-text" type="button">送信</button>
+        </form>
+      </section>
+    </aside>
+  </main>
+
+  <div class="settings-overlay" id="settings-overlay" hidden>
+    <div class="settings-panel">
+      <div class="settings-panel__header">
+        <h2>設定</h2>
+        <button class="btn btn--icon" id="btn-close-settings" type="button" aria-label="閉じる">✕</button>
+      </div>
+
+      <div class="settings-panel__body">
+        <section class="settings-section">
+          <h3>Gemini API</h3>
+          <p class="settings-hint">
+            APIキーは<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>で取得できます。
+            このブラウザの localStorage にのみ保存され、Gemini(generativelanguage.googleapis.com)への直接接続にのみ使われます。
+            公開アプリにする場合は、キーをサーバー側に隠す構成への切り替えを推奨します。
+          </p>
+          <label class="field">
+            <span>APIキー</span>
+            <input type="password" id="api-key-input" autocomplete="off" placeholder="AIza...">
+          </label>
+          <label class="field">
+            <span>モデルID</span>
+            <input type="text" id="model-input" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>音声(プリセットボイス)</span>
+            <select id="voice-select" class="select"></select>
+          </label>
+          <label class="field">
+            <span>言語コード</span>
+            <input type="text" id="language-input" autocomplete="off">
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h3>キャラクター設定・追加指示</h3>
+          <p class="settings-hint">性格・話し方の基本設定は js/character.js に定義済みです。ここでは追加の指示だけを自由記述できます。</p>
+          <label class="field">
+            <span>追加の指示(任意)</span>
+            <textarea id="extra-notes-input" rows="3" placeholder="例: 一人称は「わたし」にして、など"></textarea>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h3>長期記憶(日記)</h3>
+          <p class="settings-hint">
+            会話終了時に、そのセッションの要約をこのブラウザにだけ保存し、次回以降の会話の参考として渡します。
+          </p>
+          <label class="field field--checkbox">
+            <input type="checkbox" id="diary-enabled-input">
+            <span>長期記憶(日記)を有効にする</span>
+          </label>
+          <ul class="diary-list" id="diary-list"></ul>
+          <button class="btn btn--danger" id="btn-clear-diary" type="button">日記を全て削除</button>
+        </section>
+
+        <section class="settings-section">
+          <h3>VRMモデル</h3>
+          <p class="settings-hint">
+            VRoid Studioなどで作成した .vrm ファイルを選択してください。読み込んだモデルはこのブラウザに保存され、次回起動時も自動で表示されます。
+          </p>
+          <p class="settings-hint" id="vrm-status-text">未読み込み(プレースホルダー表示中)</p>
+          <label class="field">
+            <span>VRMファイル</span>
+            <input type="file" id="vrm-file-input" accept=".vrm">
+          </label>
+          <button class="btn btn--danger" id="btn-clear-vrm" type="button">読み込み済みVRMを削除</button>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
