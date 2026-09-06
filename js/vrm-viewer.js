@@ -400,7 +400,8 @@ export class VrmViewer {
 
   /**
    * ダンスモーション。一定のビートに合わせて、腰の左右の揺れ+上下バウンス、
-   * 背骨の捻り、腕の振り上げ、首の縦揺れを組み合わせた簡易的な振り付け。
+   * 背骨の捻り、腕の振り上げ、首の縦揺れ、左右交互の足のステップ(足上げ+
+   * 膝の屈伸)を組み合わせた簡易的な振り付け。
    * startDance()が呼ばれてから_danceDurationMsが経過するまで再生される。
    */
   _animateDance(humanoid, base, t) {
@@ -448,6 +449,31 @@ export class VrmViewer {
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
       rightLowerArm.rotation.x = base.rightLowerArm.x + Math.sin(beat * 1.5 + Math.PI) * 0.35;
+    }
+
+    // 足を左右交互に持ち上げてステップを踏む(0は下ろした状態、1で持ち上げ+膝を曲げる)
+    // ※脚の動きは未確認のため、変な向きに曲がる場合は符号を反転させる想定
+    const stepL = Math.max(0, Math.sin(beat));
+    const stepR = Math.max(0, Math.sin(beat + Math.PI));
+
+    const leftUpperLeg = humanoid.getNormalizedBoneNode("leftUpperLeg");
+    if (leftUpperLeg) leftUpperLeg.rotation.x = -stepL * 0.5; // 股関節を曲げて足を前に上げる
+    const rightUpperLeg = humanoid.getNormalizedBoneNode("rightUpperLeg");
+    if (rightUpperLeg) rightUpperLeg.rotation.x = -stepR * 0.5;
+
+    const leftLowerLeg = humanoid.getNormalizedBoneNode("leftLowerLeg");
+    if (leftLowerLeg) leftLowerLeg.rotation.x = stepL * 0.8; // 膝を曲げる(屈伸)
+    const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
+    if (rightLowerLeg) rightLowerLeg.rotation.x = stepR * 0.8;
+
+    const leftFoot = humanoid.getNormalizedBoneNode("leftFoot");
+    if (leftFoot) leftFoot.rotation.x = stepL * 0.3; // 足首を軽く補正
+    const rightFoot = humanoid.getNormalizedBoneNode("rightFoot");
+    if (rightFoot) rightFoot.rotation.x = stepR * 0.3;
+
+    // 足を踏み出す側に、腰をほんの少し重心移動させる
+    if (hips && this._hipsBasePosition) {
+      hips.position.x = this._hipsBasePosition.x + (stepR - stepL) * 0.03;
     }
   }
 
