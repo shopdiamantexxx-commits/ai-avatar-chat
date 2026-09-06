@@ -237,34 +237,40 @@ export class VrmViewer {
     if (!humanoid || !base) return;
     const t = nowMs / 1000;
 
+    // 単一周期のsin波だけだと機械的な繰り返しに見えるため、周期の異なる波を
+    // 複数重ねて「呼吸のような大きなゆらぎ」+「不規則な微動」を作る。
+    // 発話中かどうかに関わらず、常時この揺れが続く(声に反応する動きではない)。
+    const breathe = Math.sin(t * 0.6) * 0.7 + Math.sin(t * 0.23 + 1.1) * 0.3;
+    const micro = Math.sin(t * 1.7 + 2.0) * 0.4 + Math.sin(t * 2.9 + 0.4) * 0.3;
+
     const hips = humanoid.getNormalizedBoneNode("hips");
-    if (hips && base.hips) hips.rotation.z = base.hips.z + Math.sin(t * 0.6) * 0.02;
+    if (hips && base.hips) hips.rotation.z = base.hips.z + breathe * 0.025;
 
     const spine = humanoid.getNormalizedBoneNode("spine");
-    if (spine && base.spine) spine.rotation.z = base.spine.z + Math.sin(t * 0.6 + Math.PI) * 0.015;
+    if (spine && base.spine) spine.rotation.z = base.spine.z - breathe * 0.02 + micro * 0.005;
 
     const neck = humanoid.getNormalizedBoneNode("neck");
-    if (neck && base.neck) neck.rotation.z = base.neck.z + Math.sin(t * 0.5) * 0.01;
-
-    // 話している(口パク中)ときだけ、腕にもゆるい身振り手振り風の動きを足す
-    const gesture = this.mouthCurrent;
+    if (neck && base.neck) {
+      neck.rotation.z = base.neck.z + micro * 0.015;
+      neck.rotation.x = base.neck.x + Math.sin(t * 0.35 + 0.8) * 0.015;
+    }
 
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
     if (leftUpperArm && base.leftUpperArm) {
-      leftUpperArm.rotation.z = base.leftUpperArm.z + Math.sin(t * 0.7) * 0.02 + Math.sin(t * 3.1) * 0.06 * gesture;
+      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.02 + micro * 0.015;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
     if (rightUpperArm && base.rightUpperArm) {
-      rightUpperArm.rotation.z = base.rightUpperArm.z + Math.sin(t * 0.7 + Math.PI) * 0.02 + Math.sin(t * 3.1 + 1.3) * 0.06 * gesture;
+      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.02 - micro * 0.015;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
     if (leftLowerArm && base.leftLowerArm) {
-      leftLowerArm.rotation.x = base.leftLowerArm.x + Math.sin(t * 3.4) * 0.09 * gesture;
+      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.03;
     }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
-      rightLowerArm.rotation.x = base.rightLowerArm.x + Math.sin(t * 3.4 + 0.7) * 0.09 * gesture;
+      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.03;
     }
   }
 
