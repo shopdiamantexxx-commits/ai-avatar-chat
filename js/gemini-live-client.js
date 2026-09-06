@@ -11,6 +11,38 @@ const WS_HOST = "generativelanguage.googleapis.com";
 const WS_PATH =
   "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 
+// [検証用/Phase 0] ネイティブ音声出力(responseModalities:["AUDIO"])のままfunction
+// calling(tools)を併用できるかを確認するための実験的なツール定義。
+// systemInstructionでは「呼び出すように」とはまだ指示しておらず、モデルが自発的に
+// 呼ぶかどうかも含めてこの段階の検証対象。VRM側への反映はまだ行わず、
+// console.logで受信内容を確認するだけにとどめる。
+const EXPRESS_FUNCTION_DECLARATION = {
+  name: "express",
+  description:
+    "話している内容や感情の種類が変わるタイミングで呼び出し、キャラクターの表情・身振りの" +
+    "種類と強さを表す。1つの発言(ターン)の中で、感情や話し方の種類が変わるたびに呼んでよい。",
+  parameters: {
+    type: "OBJECT",
+    properties: {
+      emotion: {
+        type: "STRING",
+        description: "現在の感情・話し方の種類",
+        enum: ["neutral", "happy", "surprised", "sad", "troubled", "thinking", "explaining", "angry"],
+      },
+      gesture: {
+        type: "STRING",
+        description: "添えるとよい身振りの種類(任意)",
+        enum: ["none", "nod", "tilt_head", "explain_hands", "point", "shrug", "think_pose", "cover_mouth", "cross_arms"],
+      },
+      intensity: {
+        type: "NUMBER",
+        description: "感情・身振りの強さ(0.0〜1.0)",
+      },
+    },
+    required: ["emotion"],
+  },
+};
+
 export class GeminiLiveClient extends EventTarget {
   /**
    * @param {object} opts
@@ -62,11 +94,15 @@ export class GeminiLiveClient extends EventTarget {
               },
             },
             systemInstruction: { parts: [{ text: this.systemInstruction }] },
+            // [検証用/Phase 0] responseModalities:["AUDIO"]と併用できるかを確認するための
+            // tools宣言。既存の音声・文字起こし設定には影響しない。
+            tools: [{ functionDeclarations: [EXPRESS_FUNCTION_DECLARATION] }],
             ...(this.enableTranscription
               ? { inputAudioTranscription: {}, outputAudioTranscription: {} }
               : {}),
           },
         };
+        console.log("[Gemini Live][Phase0] setup送信(tools付き):", JSON.stringify(setupMessage, null, 2));
         ws.send(JSON.stringify(setupMessage));
       });
 
@@ -144,11 +180,45 @@ export class GeminiLiveClient extends EventTarget {
       }
     }
     if (msg.toolCall) {
-      this._emit("toolCall", msg.toolCall);
+      this._handleToolCall(msg.toolCall);
     }
     if (msg.goAway) {
       this._emit("goAway", msg.goAway);
     }
+  }
+
+  /**
+   * [検証用/Phase 0] Gemini Liveからのtool call(関数呼び出し要求)を処理する。
+   * まだVRM側には何も反映せず、express()の引数(emotion/gesture/intensity)を
+   * console.logで確認できるようにするだけ。Live APIの仕様上、関数呼び出しには
+   * toolResponseを返さないと会話が先に進まない(ターンがブロックされる)ため、
+   * 内容によらず最低限のtoolResponseを送り返す。
+   */
+  _handleToolCall(toolCall) {
+    console.log("[Gemini Live][Phase0] toolCall受信(生データ):", JSON.stringify(toolCall, null, 2));
+    this._emit("toolCall", toolCall);
+
+    const functionCalls = toolCall.functionCalls || [];
+    if (functionCalls.length === 0) {
+      console.warn("[Gemini Live][Phase0] toolCallにfunctionCallsが含まれていません");
+      return;
+    }
+
+    const functionResponses = functionCalls.map((call) => {
+      if (call.name === "express") {
+        const { emotion, gesture, intensity } = call.args || {};
+        console.log(
+          `[Gemini Live][Phase0] express()呼び出しを検出: emotion=${emotion}, gesture=${gesture}, intensity=${intensity} (id=${call.id})`
+        );
+      } else {
+        console.log(`[Gemini Live][Phase0] 未知の関数呼び出し: ${call.name}(${JSON.stringify(call.args)}) id=${call.id}`);
+      }
+      // 内容は問わず、呼び出しを受け付けたことだけを返す最小限のtoolResponse
+      return { id: call.id, name: call.name, response: { result: "ok" } };
+    });
+
+    this._send({ toolResponse: { functionResponses } });
+    console.log("[Gemini Live][Phase0] toolResponse送信:", JSON.stringify(functionResponses, null, 2));
   }
 
   _emit(type, detail) {
