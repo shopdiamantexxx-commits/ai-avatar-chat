@@ -383,26 +383,21 @@ export class VrmViewer {
       neck.rotation.z = base.neck.z + micro * 0.02;
     }
 
-    // 立っているときも完全な棒立ちにならないよう、膝のわずかな屈伸と
-    // 体重の左右移動を常時加える(ダンスで使ったのと同じ脚のボーン・技法を
-    // 待機モーションにも適用する)。前回の振れ幅・速さでは弱すぎて
-    // 「あまり違いがない」と感じられたため、振れ幅を約2倍、周期も
-    // 約2.5倍速く(18秒→7秒程度)して、はっきり分かるようにした。
+    // 立っているときも完全な棒立ちにならないよう、体重の左右移動を常時加える。
+    // ※前回、膝の曲げ伸ばし(動的なkneeBend)を大きくしたところ、足首側の
+    // 補正(IK)がないため「脚が実質的に縮んで足が地面から浮いて見える」
+    // 状態になってしまった。膝は動かさず一定のわずかな曲げのみに留め、
+    // 体重移動は腰の左右位置(hips.position.x)だけで表現する。
     const weightShift = Math.sin(t * 0.9 + 0.6); // -1〜1、7秒程度の周期で左右の重心が入れ替わる
-    const kneeBend = 0.05 + Math.max(0, Math.sin(t * 1.2)) * 0.04; // 常時はっきり曲がっている
-
-    const leftUpperLeg = humanoid.getNormalizedBoneNode("leftUpperLeg");
-    if (leftUpperLeg) leftUpperLeg.rotation.x = -Math.max(0, -weightShift) * 0.09;
-    const rightUpperLeg = humanoid.getNormalizedBoneNode("rightUpperLeg");
-    if (rightUpperLeg) rightUpperLeg.rotation.x = -Math.max(0, weightShift) * 0.09;
+    const kneeBend = 0.035; // 常に一定のごくわずかな曲げ(動かさない)
 
     const leftLowerLeg = humanoid.getNormalizedBoneNode("leftLowerLeg");
-    if (leftLowerLeg) leftLowerLeg.rotation.x = kneeBend + Math.max(0, -weightShift) * 0.07;
+    if (leftLowerLeg) leftLowerLeg.rotation.x = kneeBend;
     const rightLowerLeg = humanoid.getNormalizedBoneNode("rightLowerLeg");
-    if (rightLowerLeg) rightLowerLeg.rotation.x = kneeBend + Math.max(0, weightShift) * 0.07;
+    if (rightLowerLeg) rightLowerLeg.rotation.x = kneeBend;
 
     if (hips && this._hipsBasePosition) {
-      hips.position.x = this._hipsBasePosition.x + weightShift * 0.03;
+      hips.position.x = this._hipsBasePosition.x + weightShift * 0.02;
     }
 
     // 手首にも揺れを足す(これまで未使用だったボーン)
