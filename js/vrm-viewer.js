@@ -184,16 +184,32 @@ export class VrmViewer {
   }
 
   /**
-   * 待機モーションで動かすボーンの「読み込み直後の角度」を控えておく。
-   * 正規化ボーン(getNormalizedBoneNode)は回転ゼロがTポーズを表すため、
-   * ここを基準にせず絶対値で角度を上書きすると、腕がTの字に開くなど
-   * モデル本来のポーズ(腕を下ろした状態など)が壊れてしまう。
-   * 必ず「元の角度+揺れ」の形で動かすため、元の角度をここで保存する。
+   * VRMは読み込み直後、正規化ボーン(getNormalizedBoneNode)上では
+   * 回転ゼロ、つまり「Tポーズ」(両腕を真横に伸ばした状態)になっている。
+   * これはthree-vrm/VRM仕様上の既定の挙動であり、多くのビューアで見慣れている
+   * 「腕を下ろした自然な状態」は、アプリ側が明示的に腕のボーンを回転させて
+   * 作っているもの。ここでその「休め」姿勢を作り、待機モーションで動かす
+   * 各ボーンの基準角度として控えておく(以後はこの基準角度に揺れを足すだけで、
+   * 上書きはしない)。
    */
   _captureBoneBaseRotations(vrm) {
     this._boneBaseRotations = {};
     const humanoid = vrm.humanoid;
     if (!humanoid) return;
+
+    const deg = (d) => (d * Math.PI) / 180;
+
+    // Tポーズから腕を下ろす(上腕を70度、前腕をさらに10度、体側へ回転させる)
+    const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
+    if (leftUpperArm) leftUpperArm.rotation.z = deg(70);
+    const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
+    if (rightUpperArm) rightUpperArm.rotation.z = deg(-70);
+    const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
+    if (leftLowerArm) leftLowerArm.rotation.z = deg(10);
+    const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
+    if (rightLowerArm) rightLowerArm.rotation.z = deg(-10);
+
+    // hips/spine/neckはTポーズのままでも見た目に違和感がないため触らない
     const boneNames = [
       "hips",
       "spine",
