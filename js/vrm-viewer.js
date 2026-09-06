@@ -200,14 +200,15 @@ export class VrmViewer {
     const deg = (d) => (d * Math.PI) / 180;
 
     // Tポーズから腕を下ろす(上腕を70度、前腕をさらに10度、体側へ回転させる)
+    // ※符号は実機確認の結果、上に上がる向きだったため反転させている
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
-    if (leftUpperArm) leftUpperArm.rotation.z = deg(70);
+    if (leftUpperArm) leftUpperArm.rotation.z = deg(-70);
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
-    if (rightUpperArm) rightUpperArm.rotation.z = deg(-70);
+    if (rightUpperArm) rightUpperArm.rotation.z = deg(70);
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
-    if (leftLowerArm) leftLowerArm.rotation.z = deg(10);
+    if (leftLowerArm) leftLowerArm.rotation.z = deg(-10);
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
-    if (rightLowerArm) rightLowerArm.rotation.z = deg(-10);
+    if (rightLowerArm) rightLowerArm.rotation.z = deg(10);
 
     // hips/spine/neckはTポーズのままでも見た目に違和感がないため触らない
     const boneNames = [
