@@ -2,7 +2,7 @@
 // VRMファイルが読み込まれていない間は、簡易プレースホルダー(発光する球体+目)を
 // 表示し、「見た目がまだ無くても動作は確認できる」状態にしておく。
 
-let THREE, GLTFLoader, VRMLoaderPlugin, VRMUtils;
+let THREE, GLTFLoader, VRMLoaderPlugin, VRMUtils, OrbitControls;
 let modulesPromise = null;
 
 async function loadModules() {
@@ -10,10 +10,12 @@ async function loadModules() {
     modulesPromise = Promise.all([
       import("three"),
       import("three/addons/loaders/GLTFLoader.js"),
+      import("three/addons/controls/OrbitControls.js"),
       import("@pixiv/three-vrm"),
-    ]).then(([threeMod, gltfMod, vrmMod]) => {
+    ]).then(([threeMod, gltfMod, controlsMod, vrmMod]) => {
       THREE = threeMod;
       GLTFLoader = gltfMod.GLTFLoader;
+      OrbitControls = controlsMod.OrbitControls;
       VRMLoaderPlugin = vrmMod.VRMLoaderPlugin;
       VRMUtils = vrmMod.VRMUtils;
     });
@@ -59,19 +61,26 @@ export class VrmViewer {
     const ambient = new THREE.HemisphereLight(0xffffff, 0x30303a, 0.9);
     this.scene.add(ambient);
 
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.enablePan = false;
+    this.controls.minPolarAngle = Math.PI * 0.05; // 真上からの覗き込みを制限
+    this.controls.maxPolarAngle = Math.PI * 0.85; // 真下からの覗き込みを制限
+
     this._addPlaceholder();
     this._frameCharacter(1.6, 0.9); // プレースホルダー用の暫定フレーミング(全身が入る距離)
     this.clock = new THREE.Clock();
     this._ready = true;
     this._resize();
     window.addEventListener("resize", () => this._resize());
-    canvas.addEventListener("wheel", (e) => this._onWheelZoom(e), { passive: false });
     this._tick();
   }
 
   /**
    * カメラの注視点(lookAtY、だいたい腰の高さ)と、全身がちょうど収まる距離を
-   * 計算してセットする。以後はマウスホイールでこの距離を前後させてズームする。
+   * 計算してセットする。以後はOrbitControlsでドラッグして周回・ホイールで
+   * ズームイン/アウトできる。
    * @param {number} headTopY 頭のてっぺんのおおよその高さ(m)
    * @param {number} lookAtY  注視点の高さ(m。腰の高さを想定)
    */
@@ -81,30 +90,11 @@ export class VrmViewer {
     const halfFovRad = ((this.camera.fov || 30) / 2) * (Math.PI / 180);
     const fullBodyDistance = visibleHeight / (2 * Math.tan(halfFovRad));
 
-    this._lookAtY = lookAtY;
-    this._cameraDistance = fullBodyDistance;
-    this._minCameraDistance = 0.4;
-    this._maxCameraDistance = fullBodyDistance * 2.2;
-    this._updateCameraPosition();
-  }
-
-  _updateCameraPosition() {
-    if (this._lookAtY === undefined) return;
-    this.camera.position.set(0, this._lookAtY, this._cameraDistance);
-    this.camera.lookAt(0, this._lookAtY, 0);
-  }
-
-  /** マウスホイールでカメラを前後させて拡大縮小する */
-  _onWheelZoom(e) {
-    if (this._cameraDistance === undefined) return;
-    e.preventDefault();
-    // 距離が近いほど細かく、遠いほど大きくズームできるようにする
-    const delta = e.deltaY * 0.0015 * this._cameraDistance;
-    this._cameraDistance = Math.max(
-      this._minCameraDistance,
-      Math.min(this._maxCameraDistance, this._cameraDistance + delta)
-    );
-    this._updateCameraPosition();
+    this.camera.position.set(0, lookAtY, fullBodyDistance);
+    this.controls.target.set(0, lookAtY, 0);
+    this.controls.minDistance = 0.4;
+    this.controls.maxDistance = fullBodyDistance * 2.2;
+    this.controls.update();
   }
 
   _resize() {
@@ -514,12 +504,14 @@ export class VrmViewer {
       }
     }
 
+    this.controls?.update(); // enableDampingのために毎フレーム呼ぶ必要がある
     this.renderer.render(this.scene, this.camera);
   }
 
   dispose() {
     if (this._raf) cancelAnimationFrame(this._raf);
     window.removeEventListener("resize", () => this._resize());
+    this.controls?.dispose();
     this.renderer?.dispose();
   }
 }
