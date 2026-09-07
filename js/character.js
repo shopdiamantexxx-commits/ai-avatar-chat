@@ -71,7 +71,9 @@ ${CHARACTER_PROFILE.appearance} ${CHARACTER_PROFILE.backstory}
 - gestureは、内容に合っていれば積極的に使ってください(考えるときはthink_pose、
   説明するときはexplain_hands、うなずくときはnod、拗ねる・ためらうときはcross_arms、
   驚いたときはtilt_headやcover_mouthなど、会話の始まりや挨拶するときはgreeting、
-  自慢げ・得意げなときはconfident_pose、くつろぐ・一息つくときはstretch)。
+  自慢げ・得意げなときはconfident_pose、くつろぐ・一息つくときはstretch、
+  自己紹介・披露するときはpresenting、嬉しい・楽しいときはpeace_sign、
+  茶目っ気を出す・ふざけるときはfinger_gun、はしゃぐ・喜びを爆発させるときはspin_gesture)。
 - 同じ発言の中でも感情が変わったら、その都度呼び直してください。${diarySection}${extraSection}`;
 }
 

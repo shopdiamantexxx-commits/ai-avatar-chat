@@ -34,6 +34,12 @@ const GESTURE_VRMA_URLS = {
   // stretch: 同セットのVRMA_07(屈伸運動)。くつろぐ・一息つく場面用に
   // 意味を割り当てている(元々は動作確認用の屈伸モーション)。
   stretch: "assets/motions/stretch.vrma",
+  // 以下も同じVRoid Project公式セットの残り。元の意味(全身を見せる/Vサイン/
+  // 撃つ/回る)とは異なる会話用の意味を割り当てている。
+  presenting: "assets/motions/presenting.vrma", // VRMA_01(全身を見せる)→自己紹介・披露する場面
+  peace_sign: "assets/motions/peace_sign.vrma", // VRMA_03(Vサイン)→嬉しい・楽しい場面
+  finger_gun: "assets/motions/finger_gun.vrma", // VRMA_04(撃つ)→茶目っ気・ふざける場面
+  spin_gesture: "assets/motions/spin_gesture.vrma", // VRMA_05(回る)→はしゃぐ・喜びを爆発させる場面
 };
 
 function randomNormal(mean = 0, stdDev = 1) {
@@ -386,6 +392,10 @@ export class VrmViewer {
       greeting: 2400,
       confident_pose: 2400,
       stretch: 2400,
+      presenting: 2400,
+      peace_sign: 2000,
+      finger_gun: 2000,
+      spin_gesture: 2600,
     };
     if (!name || name === "none" || !(name in defaultDurations)) {
       console.warn(`[playGesture] 未知のジェスチャー名のため無視: "${name}"`);
