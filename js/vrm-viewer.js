@@ -25,6 +25,9 @@ const GESTURE_VRMA_URLS = {
   // 腕が真横に伸びきるなど、リターゲット自体が破綻した結果になったため無効化中。
   // ファイルは assets/motions/angry.vrma に残しているが、登録は外して
   // 従来の手書きEuler角(_animateGesture)にフォールバックさせる。
+  // greeting: VRoid Project公式の無料VRMAアニメーション7種セット(BOOTH)のうち
+  // VRMA_02(挨拶)。リターゲット不要の公式素材のため、think_pose同様に信頼できる。
+  greeting: "assets/motions/greeting.vrma",
 };
 
 function randomNormal(mean = 0, stdDev = 1) {
@@ -374,6 +377,7 @@ export class VrmViewer {
       think_pose: 2600,
       cover_mouth: 1600,
       cross_arms: 2400,
+      greeting: 2400,
     };
     if (!name || name === "none" || !(name in defaultDurations)) {
       console.warn(`[playGesture] 未知のジェスチャー名のため無視: "${name}"`);

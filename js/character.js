@@ -70,7 +70,7 @@ ${CHARACTER_PROFILE.appearance} ${CHARACTER_PROFILE.backstory}
 気持ちが表れるようにするための仕組みです。
 - gestureは、内容に合っていれば積極的に使ってください(考えるときはthink_pose、
   説明するときはexplain_hands、うなずくときはnod、拗ねる・ためらうときはcross_arms、
-  驚いたときはtilt_headやcover_mouthなど)。
+  驚いたときはtilt_headやcover_mouthなど、会話の始まりや挨拶するときはgreeting)。
 - 同じ発言の中でも感情が変わったら、その都度呼び直してください。${diarySection}${extraSection}`;
 }
 

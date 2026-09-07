@@ -32,7 +32,7 @@ const EXPRESS_FUNCTION_DECLARATION = {
       gesture: {
         type: "STRING",
         description: "添えるとよい身振りの種類(任意)",
-        enum: ["none", "nod", "tilt_head", "explain_hands", "point", "shrug", "think_pose", "cover_mouth", "cross_arms"],
+        enum: ["none", "nod", "tilt_head", "explain_hands", "point", "shrug", "think_pose", "cover_mouth", "cross_arms", "greeting"],
       },
       intensity: {
         type: "NUMBER",
