@@ -808,16 +808,14 @@ export class VrmViewer {
         break;
       }
       case "cross_arms": {
-        if (leftUpperArm && base.leftUpperArm) {
-          leftUpperArm.rotation.z = base.leftUpperArm.z + 0.55 * envelope;
-          leftUpperArm.rotation.x = 0.5 * envelope;
-        }
-        if (rightUpperArm && base.rightUpperArm) {
-          rightUpperArm.rotation.z = base.rightUpperArm.z - 0.55 * envelope;
-          rightUpperArm.rotation.x = 0.5 * envelope;
-        }
-        if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + 1.6 * envelope;
-        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.6 * envelope;
+        // 前腕を前方(未検証だったupperArmのX軸)に回す案は、実機で「腕を組む」
+        // どころか「腕が横に広がる」結果になったため撤去。think_pose/cover_mouthと
+        // 同じ、検証済みの軸(upperArm=Z軸で少し上げる、lowerArm=X軸で肘を
+        // 大きく曲げる)だけで、両腕を体の前で折りたたむ形を作る。
+        if (leftUpperArm && base.leftUpperArm) leftUpperArm.rotation.z = base.leftUpperArm.z + 0.45 * envelope;
+        if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.45 * envelope;
+        if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + 1.9 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.9 * envelope;
         break;
       }
       default:
