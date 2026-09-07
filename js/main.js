@@ -1,4 +1,5 @@
 import { GeminiLiveClient } from "./gemini-live-client.js";
+import { OpenAiRealtimeClient } from "./openai-realtime-client.js";
 import { CameraCapture } from "./camera.js";
 import { VrmViewer } from "./vrm-viewer.js";
 import { settings, diary, saveVrmFile, loadVrmFile, clearVrmFile } from "./store.js";
@@ -8,6 +9,9 @@ import {
   DEFAULT_MODEL,
   DEFAULT_VOICE,
   DEFAULT_LANGUAGE,
+  OPENAI_VOICE_OPTIONS,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_VOICE,
 } from "./character.js";
 
 const $ = (id) => document.getElementById(id);
@@ -32,10 +36,16 @@ const els = {
   btnOpenSettings: $("btn-open-settings"),
   btnCloseSettings: $("btn-close-settings"),
   settingsOverlay: $("settings-overlay"),
+  aiBackendSelect: $("ai-backend-select"),
+  geminiSettingsSection: $("gemini-settings-section"),
+  openaiSettingsSection: $("openai-settings-section"),
   apiKeyInput: $("api-key-input"),
   modelInput: $("model-input"),
   voiceSelect: $("voice-select"),
   languageInput: $("language-input"),
+  openaiApiKeyInput: $("openai-api-key-input"),
+  openaiModelInput: $("openai-model-input"),
+  openaiVoiceSelect: $("openai-voice-select"),
   extraNotesInput: $("extra-notes-input"),
   diaryEnabledInput: $("diary-enabled-input"),
   diaryList: $("diary-list"),
@@ -159,7 +169,14 @@ els.btnClearVrm.addEventListener("click", async () => {
 });
 
 // ---------- 設定パネル ----------
+function updateBackendSectionVisibility() {
+  const backend = settings.getAiBackend();
+  els.geminiSettingsSection.hidden = backend !== "gemini";
+  els.openaiSettingsSection.hidden = backend !== "openai";
+}
+
 function loadSettingsIntoForm() {
+  els.aiBackendSelect.value = settings.getAiBackend();
   els.apiKeyInput.value = settings.getApiKey();
   els.modelInput.value = settings.getModel(DEFAULT_MODEL);
   els.languageInput.value = settings.getLanguage(DEFAULT_LANGUAGE);
@@ -175,6 +192,18 @@ function loadSettingsIntoForm() {
   }
   els.voiceSelect.value = settings.getVoice(DEFAULT_VOICE);
 
+  els.openaiApiKeyInput.value = settings.getOpenaiApiKey();
+  els.openaiModelInput.value = settings.getOpenaiModel(DEFAULT_OPENAI_MODEL);
+  els.openaiVoiceSelect.innerHTML = "";
+  for (const voice of OPENAI_VOICE_OPTIONS) {
+    const opt = document.createElement("option");
+    opt.value = voice;
+    opt.textContent = voice;
+    els.openaiVoiceSelect.appendChild(opt);
+  }
+  els.openaiVoiceSelect.value = settings.getOpenaiVoice(DEFAULT_OPENAI_VOICE);
+
+  updateBackendSectionVisibility();
   renderDiaryList();
 }
 
@@ -207,10 +236,17 @@ for (const [el, save] of [
   [els.modelInput, (v) => settings.setModel(v)],
   [els.languageInput, (v) => settings.setLanguage(v)],
   [els.extraNotesInput, (v) => settings.setExtraNotes(v)],
+  [els.openaiApiKeyInput, (v) => settings.setOpenaiApiKey(v)],
+  [els.openaiModelInput, (v) => settings.setOpenaiModel(v)],
 ]) {
   el.addEventListener("change", () => save(el.value));
 }
 els.voiceSelect.addEventListener("change", () => settings.setVoice(els.voiceSelect.value));
+els.openaiVoiceSelect.addEventListener("change", () => settings.setOpenaiVoice(els.openaiVoiceSelect.value));
+els.aiBackendSelect.addEventListener("change", () => {
+  settings.setAiBackend(els.aiBackendSelect.value);
+  updateBackendSectionVisibility();
+});
 els.diaryEnabledInput.addEventListener("change", () => settings.setDiaryEnabled(els.diaryEnabledInput.checked));
 els.btnClearDiary.addEventListener("click", () => {
   diary.clear();
@@ -281,7 +317,9 @@ els.btnCameraToggle.addEventListener("click", () => {
 });
 
 // ---------- マイク入力(録音) ----------
-async function startMic() {
+// targetSampleRate: バックエンドが要求するレート(Gemini=16000, OpenAI=24000)。
+// client.micSampleRateを呼び出し元(startSession)から渡してもらう。
+async function startMic(targetSampleRate = 16000) {
   state.micStream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   });
@@ -290,7 +328,7 @@ async function startMic() {
   await ctx.audioWorklet.addModule("js/worklets/recorder-processor.js");
   const source = ctx.createMediaStreamSource(state.micStream);
   const node = new AudioWorkletNode(ctx, "recorder-processor", {
-    processorOptions: { targetSampleRate: 16000, chunkMs: 100 },
+    processorOptions: { targetSampleRate, chunkMs: 100 },
   });
   node.port.onmessage = (event) => {
     if (!state.connected || !state.client) return;
@@ -367,9 +405,11 @@ function finalizePendingOutputLine() {
 }
 
 async function startSession() {
-  const apiKey = settings.getApiKey();
+  const backend = settings.getAiBackend();
+  const apiKey = backend === "openai" ? settings.getOpenaiApiKey() : settings.getApiKey();
   if (!apiKey) {
-    setStatus("設定画面でGemini APIキーを入力してください", "error");
+    const label = backend === "openai" ? "OpenAI" : "Gemini";
+    setStatus(`設定画面で${label} APIキーを入力してください`, "error");
     els.settingsOverlay.hidden = false;
     return;
   }
@@ -384,13 +424,21 @@ async function startSession() {
     extraNotes: settings.getExtraNotes(),
   });
 
-  const client = new GeminiLiveClient({
-    apiKey,
-    model: settings.getModel(DEFAULT_MODEL),
-    systemInstruction,
-    voiceName: settings.getVoice(DEFAULT_VOICE),
-    languageCode: settings.getLanguage(DEFAULT_LANGUAGE),
-  });
+  const client =
+    backend === "openai"
+      ? new OpenAiRealtimeClient({
+          apiKey,
+          model: settings.getOpenaiModel(DEFAULT_OPENAI_MODEL),
+          systemInstruction,
+          voiceName: settings.getOpenaiVoice(DEFAULT_OPENAI_VOICE),
+        })
+      : new GeminiLiveClient({
+          apiKey,
+          model: settings.getModel(DEFAULT_MODEL),
+          systemInstruction,
+          voiceName: settings.getVoice(DEFAULT_VOICE),
+          languageCode: settings.getLanguage(DEFAULT_LANGUAGE),
+        });
 
   client.addEventListener("audio", (e) => playAudioChunk(e.detail.base64));
   client.addEventListener("inputTranscript", (e) => {
@@ -428,7 +476,7 @@ async function startSession() {
     }
   });
   client.addEventListener("error", (e) => {
-    console.error("Gemini Liveエラー:", e.detail);
+    console.error(`${backend === "openai" ? "OpenAI Realtime" : "Gemini Live"}エラー:`, e.detail);
     setStatus(`エラー: ${e.detail.message}`, "error");
   });
   client.addEventListener("close", (e) => {
@@ -441,7 +489,7 @@ async function startSession() {
   try {
     await ensurePlayerReady();
     await client.connect();
-    await startMic();
+    await startMic(client.micSampleRate);
     state.client = client;
     state.connected = true;
     state.connecting = false;

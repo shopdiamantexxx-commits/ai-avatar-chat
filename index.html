@@ -73,6 +73,20 @@
 
       <div class="settings-panel__body">
         <section class="settings-section">
+          <h3>AIバックエンド</h3>
+          <p class="settings-hint">
+            会話の頭脳として使うAIを選べます。切り替えても、それぞれのAPIキー・設定は別々に保存されます。
+          </p>
+          <label class="field">
+            <span>使用するAI</span>
+            <select id="ai-backend-select" class="select">
+              <option value="gemini">Gemini Live</option>
+              <option value="openai">ChatGPT (OpenAI Realtime)</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="settings-section" id="gemini-settings-section">
           <h3>Gemini API</h3>
           <p class="settings-hint">
             APIキーは<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>で取得できます。
@@ -94,6 +108,27 @@
           <label class="field">
             <span>言語コード</span>
             <input type="text" id="language-input" autocomplete="off">
+          </label>
+        </section>
+
+        <section class="settings-section" id="openai-settings-section" hidden>
+          <h3>OpenAI API(ChatGPT)</h3>
+          <p class="settings-hint">
+            APIキーは<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform</a>で取得できます。
+            このブラウザの localStorage にのみ保存され、OpenAI(api.openai.com)への直接接続にのみ使われます。
+            公開アプリにする場合は、キーをサーバー側に隠す構成への切り替えを推奨します。
+          </p>
+          <label class="field">
+            <span>APIキー</span>
+            <input type="password" id="openai-api-key-input" autocomplete="off" placeholder="sk-...">
+          </label>
+          <label class="field">
+            <span>モデルID</span>
+            <input type="text" id="openai-model-input" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>音声(プリセットボイス)</span>
+            <select id="openai-voice-select" class="select"></select>
           </label>
         </section>
 

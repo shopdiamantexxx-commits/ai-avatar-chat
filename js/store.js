@@ -12,6 +12,10 @@ const LS_KEYS = {
   diary: "aiavatar.diary",
   cameraEnabled: "aiavatar.cameraEnabled",
   cameraDeviceId: "aiavatar.cameraDeviceId",
+  aiBackend: "aiavatar.aiBackend",
+  openaiApiKey: "aiavatar.openaiApiKey",
+  openaiModel: "aiavatar.openaiModel",
+  openaiVoice: "aiavatar.openaiVoice",
 };
 
 function getStr(key, fallback = "") {
@@ -54,6 +58,17 @@ export const settings = {
   setCameraEnabled: (v) => setBool(LS_KEYS.cameraEnabled, v),
   getCameraDeviceId: () => getStr(LS_KEYS.cameraDeviceId, ""),
   setCameraDeviceId: (v) => setStr(LS_KEYS.cameraDeviceId, v),
+
+  // AIバックエンドの切り替え("gemini" | "openai")。既存のGemini実装は
+  // 変更していないので、"gemini"のままなら今まで通り動く。
+  getAiBackend: () => getStr(LS_KEYS.aiBackend, "gemini"),
+  setAiBackend: (v) => setStr(LS_KEYS.aiBackend, v),
+  getOpenaiApiKey: () => getStr(LS_KEYS.openaiApiKey, ""),
+  setOpenaiApiKey: (v) => setStr(LS_KEYS.openaiApiKey, v),
+  getOpenaiModel: (fallback) => getStr(LS_KEYS.openaiModel, fallback),
+  setOpenaiModel: (v) => setStr(LS_KEYS.openaiModel, v),
+  getOpenaiVoice: (fallback) => getStr(LS_KEYS.openaiVoice, fallback),
+  setOpenaiVoice: (v) => setStr(LS_KEYS.openaiVoice, v),
 };
 
 const MAX_DIARY_ENTRIES = 30;

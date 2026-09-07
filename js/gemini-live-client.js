@@ -65,6 +65,13 @@ export class GeminiLiveClient extends EventTarget {
     this.ready = false;
   }
 
+  // マイクの録音サンプルレート。OpenAiRealtimeClientと同じインターフェースに
+  // そろえるためのgetter(main.js側がバックエンドを問わずclient.micSampleRateを
+  // 参照してマイクを設定できるようにする)。
+  get micSampleRate() {
+    return 16000;
+  }
+
   connect() {
     return new Promise((resolve, reject) => {
       if (!this.apiKey) {

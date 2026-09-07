@@ -91,3 +91,8 @@ export const VOICE_OPTIONS = [
 export const DEFAULT_MODEL = "models/gemini-3.1-flash-live-preview";
 export const DEFAULT_VOICE = "Aoede";
 export const DEFAULT_LANGUAGE = "ja-JP";
+
+// OpenAI Realtime API用の設定(js/openai-realtime-client.js)。
+export const OPENAI_VOICE_OPTIONS = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"];
+export const DEFAULT_OPENAI_MODEL = "gpt-realtime";
+export const DEFAULT_OPENAI_VOICE = "alloy";
