@@ -28,6 +28,12 @@ const GESTURE_VRMA_URLS = {
   // greeting: VRoid Project公式の無料VRMAアニメーション7種セット(BOOTH)のうち
   // VRMA_02(挨拶)。リターゲット不要の公式素材のため、think_pose同様に信頼できる。
   greeting: "assets/motions/greeting.vrma",
+  // confident_pose: 同セットのVRMA_06(モデルポーズ)。自慢げ・得意げな場面用に
+  // 意味を割り当てている(元々は撮影用の「決めポーズ」)。
+  confident_pose: "assets/motions/confident_pose.vrma",
+  // stretch: 同セットのVRMA_07(屈伸運動)。くつろぐ・一息つく場面用に
+  // 意味を割り当てている(元々は動作確認用の屈伸モーション)。
+  stretch: "assets/motions/stretch.vrma",
 };
 
 function randomNormal(mean = 0, stdDev = 1) {
@@ -378,6 +384,8 @@ export class VrmViewer {
       cover_mouth: 1600,
       cross_arms: 2400,
       greeting: 2400,
+      confident_pose: 2400,
+      stretch: 2400,
     };
     if (!name || name === "none" || !(name in defaultDurations)) {
       console.warn(`[playGesture] 未知のジェスチャー名のため無視: "${name}"`);
