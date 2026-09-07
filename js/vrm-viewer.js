@@ -99,6 +99,7 @@ export class VrmViewer {
     this._hipsBasePosition = null;
     this._danceStartTime = null;
     this._danceDurationMs = 8000;
+    this._wasDancing = false;
     // 会話中の短いワンショット・ジェスチャーの状態
     this._gestureName = null;
     this._gestureStartTime = null;
@@ -322,6 +323,20 @@ export class VrmViewer {
     setZ("rightUpperArm", 70);
     setZ("leftLowerArm", -10);
     setZ("rightLowerArm", 10);
+
+    // 脚(upperLeg/lowerLeg/foot)は待機モーション側で一切触っていないため、
+    // モデル自体の初期回転値がそのまま使われる。VRoid製モデルによっては
+    // ここが左右非対称(片足が前後にずれた「足が前後になる」状態)になって
+    // いることがあるため、明示的にゼロへ揃えて「まっすぐ立った」状態にする。
+    const setXYZ = (name) => {
+      const node = humanoid.getNormalizedBoneNode(name);
+      if (node) node.rotation.set(0, 0, 0);
+    };
+    for (const side of ["left", "right"]) {
+      setXYZ(`${side}UpperLeg`);
+      setXYZ(`${side}LowerLeg`);
+      setXYZ(`${side}Foot`);
+    }
 
     // 指をまっすぐ伸ばしたままだと不自然なので、軽く曲げて自然な手の形にする
     // (これは実機未確認のため、曲がる向きが逆の場合は符号を反転させる想定)
@@ -598,6 +613,7 @@ export class VrmViewer {
     const t = nowMs / 1000;
 
     if (this.isDancing) {
+      this._wasDancing = true;
       if (this._danceStyle === "shadowbox") {
         this._animateShadowbox(humanoid, base, t);
       } else if (this._danceStyle === "ballet") {
@@ -607,6 +623,25 @@ export class VrmViewer {
       }
       this._animateFingerWiggle(humanoid, base, t);
       return;
+    } else if (this._wasDancing) {
+      // ダンス終了直後の1回だけ、ダンス中にしか触らないボーン(脚・腰の
+      // Y回転/Y位置)を基準姿勢へ戻す。待機モーション側はこれらに触れないため、
+      // リセットしないとダンスの最後の姿勢のまま(脚が前後にずれた状態など)
+      // 固まってしまう。
+      this._wasDancing = false;
+      for (const side of ["left", "right"]) {
+        const upperLeg = humanoid.getNormalizedBoneNode(`${side}UpperLeg`);
+        if (upperLeg) upperLeg.rotation.set(0, 0, 0);
+        const lowerLeg = humanoid.getNormalizedBoneNode(`${side}LowerLeg`);
+        if (lowerLeg) lowerLeg.rotation.set(0, 0, 0);
+        const foot = humanoid.getNormalizedBoneNode(`${side}Foot`);
+        if (foot) foot.rotation.set(0, 0, 0);
+      }
+      const hipsNode = humanoid.getNormalizedBoneNode("hips");
+      if (hipsNode) {
+        hipsNode.rotation.y = 0;
+        if (this._hipsBasePosition) hipsNode.position.y = this._hipsBasePosition.y;
+      }
     }
 
     if (this.isGesturing) {
