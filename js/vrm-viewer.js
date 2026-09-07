@@ -27,7 +27,8 @@ const GESTURE_VRMA_URLS = {
   // 従来の手書きEuler角(_animateGesture)にフォールバックさせる。
   // greeting: VRoid Project公式の無料VRMAアニメーション7種セット(BOOTH)のうち
   // VRMA_02(挨拶)。リターゲット不要の公式素材のため、think_pose同様に信頼できる。
-  greeting: "assets/motions/greeting.vrma",
+  // 配列で複数登録すると、再生のたびにランダムで1つ選ばれる(単調さを避けるため)。
+  greeting: ["assets/motions/greeting.vrma"],
   // confident_pose: 同セットのVRMA_06(モデルポーズ)。自慢げ・得意げな場面用に
   // 意味を割り当てている(元々は撮影用の「決めポーズ」)。
   confident_pose: "assets/motions/confident_pose.vrma",
@@ -41,6 +42,17 @@ const GESTURE_VRMA_URLS = {
   finger_gun: "assets/motions/finger_gun.vrma", // VRMA_04(撃つ)→茶目っ気・ふざける場面
   spin_gesture: "assets/motions/spin_gesture.vrma", // VRMA_05(回る)→はしゃぐ・喜びを爆発させる場面
 };
+
+// GESTURE_VRMA_URLSの値は文字列(1個)または文字列の配列(複数候補からランダム
+// 選択)のどちらでもよい。同じジェスチャーでも毎回違うVRMAが再生されるように
+// するための仕組み(単調な繰り返しを避ける)。
+function pickVrmaUrl(value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return value[Math.floor(Math.random() * value.length)];
+  }
+  return value || null;
+}
 
 function randomNormal(mean = 0, stdDev = 1) {
   let u = 0;
@@ -412,7 +424,7 @@ export class VrmViewer {
 
     // VRMAが登録されているジェスチャー名は、そちらをAnimationMixerで再生する。
     // 登録が無い名前は、従来通り手書きEuler角(_animateGesture)にフォールバックする。
-    const vrmaUrl = GESTURE_VRMA_URLS[name];
+    const vrmaUrl = pickVrmaUrl(GESTURE_VRMA_URLS[name]);
     if (vrmaUrl) {
       this._playGestureVrma(name, vrmaUrl, durationMs || defaultDurations[name]);
       return;
