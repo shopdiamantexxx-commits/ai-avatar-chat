@@ -21,6 +21,7 @@ let modulesPromise = null;
 // (パイプラインの実配線を確認するための最小構成のため)。
 const GESTURE_VRMA_URLS = {
   think_pose: "assets/motions/test.vrma",
+  cross_arms: "assets/motions/angry.vrma",
 };
 
 function randomNormal(mean = 0, stdDev = 1) {
