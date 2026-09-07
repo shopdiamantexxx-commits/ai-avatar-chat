@@ -21,7 +21,10 @@ let modulesPromise = null;
 // (パイプラインの実配線を確認するための最小構成のため)。
 const GESTURE_VRMA_URLS = {
   think_pose: "assets/motions/test.vrma",
-  cross_arms: "assets/motions/angry.vrma",
+  // cross_arms: 3dkit.onlineで変換したangry.vrmaを試したが、脚が真上に上がる・
+  // 腕が真横に伸びきるなど、リターゲット自体が破綻した結果になったため無効化中。
+  // ファイルは assets/motions/angry.vrma に残しているが、登録は外して
+  // 従来の手書きEuler角(_animateGesture)にフォールバックさせる。
 };
 
 function randomNormal(mean = 0, stdDev = 1) {
