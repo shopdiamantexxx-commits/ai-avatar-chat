@@ -21,6 +21,7 @@ const els = {
   btnDanceWave: $("btn-dance-wave"),
   btnDanceShadowbox: $("btn-dance-shadowbox"),
   btnDanceBallet: $("btn-dance-ballet"),
+  btnTestVrma: $("btn-test-vrma"),
   textInput: $("text-input"),
   btnSendText: $("btn-send-text"),
   transcriptLog: $("transcript-log"),
@@ -108,6 +109,16 @@ viewer
 els.btnDanceWave.addEventListener("click", () => viewer.startDance("wave"));
 els.btnDanceShadowbox.addEventListener("click", () => viewer.startDance("shadowbox"));
 els.btnDanceBallet.addEventListener("click", () => viewer.startDance("ballet", 10000));
+
+// [検証用] VRMA最小再生テスト。assets/motions/ 以下にVRMAファイルを置いて確認する。
+els.btnTestVrma.addEventListener("click", async () => {
+  try {
+    await viewer.playTestVrma("assets/motions/test.vrma");
+  } catch (err) {
+    console.error(err);
+    setStatus(`VRMAテスト再生エラー: ${err.message}`, "error");
+  }
+});
 
 async function restoreSavedVrm() {
   try {

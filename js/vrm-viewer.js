@@ -3,6 +3,7 @@
 // 表示し、「見た目がまだ無くても動作は確認できる」状態にしておく。
 
 let THREE, GLTFLoader, VRMLoaderPlugin, VRMUtils, OrbitControls;
+let VRMAnimationLoaderPlugin, createVRMAnimationClip; // [検証用] VRMA最小再生テスト
 let modulesPromise = null;
 
 /**
@@ -27,12 +28,15 @@ async function loadModules() {
       import("three/addons/loaders/GLTFLoader.js"),
       import("three/addons/controls/OrbitControls.js"),
       import("@pixiv/three-vrm"),
-    ]).then(([threeMod, gltfMod, controlsMod, vrmMod]) => {
+      import("@pixiv/three-vrm-animation"), // [検証用] VRMA最小再生テスト
+    ]).then(([threeMod, gltfMod, controlsMod, vrmMod, vrmAnimMod]) => {
       THREE = threeMod;
       GLTFLoader = gltfMod.GLTFLoader;
       OrbitControls = controlsMod.OrbitControls;
       VRMLoaderPlugin = vrmMod.VRMLoaderPlugin;
       VRMUtils = vrmMod.VRMUtils;
+      VRMAnimationLoaderPlugin = vrmAnimMod.VRMAnimationLoaderPlugin;
+      createVRMAnimationClip = vrmAnimMod.createVRMAnimationClip;
     });
   }
   return modulesPromise;
@@ -64,6 +68,10 @@ export class VrmViewer {
     this._headCurrentX = 0;
     this._headCurrentY = 0;
     this._headResampleAt = 0;
+    // [検証用] VRMA最小再生テストの状態。既存のexpress()/playGesture()系とは
+    // 独立させており、まだ本格統合(think_pose等への置き換え)はしていない。
+    this.mixer = null;
+    this._testVrmaPlaying = false;
     this._ready = false;
     this._raf = null;
   }
@@ -370,6 +378,59 @@ export class VrmViewer {
     );
   }
 
+  /**
+   * [検証用] VRMAファイルを1つ読み込み、THREE.AnimationMixerで最小限に再生する。
+   * 目的は「VRMA → VRM → AnimationMixerで実際に動く」というパイプラインの
+   * 疎通確認のみで、既存のexpress()/playGesture()(nod/think_pose等)や
+   * ダンス・待機モーションとはまだ統合していない。再生中は待機モーションの
+   * 揺れ(_animateIdleBody)だけを一時的に止め、動きが分かりやすいようにする。
+   * @param {string} url 例: "assets/motions/test.vrma"
+   */
+  async playTestVrma(url) {
+    await loadModules();
+    if (!this.vrm) {
+      throw new Error("VRMが読み込まれていません(先にVRMファイルを読み込んでください)");
+    }
+
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+
+    let gltfVrma;
+    try {
+      gltfVrma = await loader.loadAsync(url);
+    } catch (err) {
+      console.error(`[playTestVrma] VRMAファイルの読み込みに失敗しました: ${url}`, err);
+      throw new Error(`VRMAファイルが見つからないか読み込めません: ${url}`);
+    }
+
+    const vrmAnimation = gltfVrma.userData.vrmAnimations?.[0];
+    if (!vrmAnimation) {
+      throw new Error(`VRMAファイルにアニメーションが含まれていません: ${url}`);
+    }
+
+    const clip = createVRMAnimationClip(vrmAnimation, this.vrm);
+
+    if (!this.mixer) {
+      this.mixer = new THREE.AnimationMixer(this.vrm.scene);
+    }
+    this.mixer.stopAllAction();
+
+    const action = this.mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.play();
+
+    this._testVrmaPlaying = true;
+    const onFinished = () => {
+      this._testVrmaPlaying = false;
+      this.mixer.removeEventListener("finished", onFinished);
+    };
+    this.mixer.addEventListener("finished", onFinished);
+
+    console.log(`[playTestVrma] 再生開始: ${url} (${clip.duration.toFixed(2)}秒)`, clip);
+  }
+
   async unloadVrm() {
     if (this.vrm) {
       this.scene.remove(this.vrm.scene);
@@ -393,6 +454,8 @@ export class VrmViewer {
    * 値が際限なく大きくなっていく心配はない。
    */
   _animateIdleBody(vrm, nowMs, delta) {
+    if (this._testVrmaPlaying) return; // [検証用] VRMA再生中は待機モーションを止める
+
     const humanoid = vrm.humanoid;
     const base = this._boneBaseRotations;
     if (!humanoid || !base) return;
@@ -865,6 +928,7 @@ export class VrmViewer {
       }
       this.vrm.scene.rotation.y = sway * 0.05;
       this._animateIdleBody(this.vrm, nowMs, delta);
+      this.mixer?.update(delta); // [検証用] VRMAのAnimationMixer(再生していない間は無害)
       this.vrm.update(delta); // lookAt(視線追従)・springBoneなどもここで更新される
       this._applyHeadFidget(this.vrm);
     } else if (this.placeholder) {
