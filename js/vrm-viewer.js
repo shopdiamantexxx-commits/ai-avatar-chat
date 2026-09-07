@@ -346,8 +346,19 @@ export class VrmViewer {
       cover_mouth: 1600,
       cross_arms: 2400,
     };
-    if (!name || name === "none" || !(name in defaultDurations)) return;
-    if (this.isDancing) return;
+    if (!name || name === "none" || !(name in defaultDurations)) {
+      console.warn(`[playGesture] 未知のジェスチャー名のため無視: "${name}"`);
+      return;
+    }
+    if (this.isDancing) {
+      console.warn(`[playGesture] ダンス中のため無視: "${name}"`);
+      return;
+    }
+    if (!this.vrm) {
+      console.warn(`[playGesture] VRM未読み込みのため無視: "${name}"`);
+      return;
+    }
+    console.log(`[playGesture] 再生開始: "${name}" (${durationMs || defaultDurations[name]}ms)`);
     this._gestureName = name;
     this._gestureStartTime = performance.now();
     this._gestureDurationMs = durationMs || defaultDurations[name];

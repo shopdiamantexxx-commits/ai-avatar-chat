@@ -405,13 +405,15 @@ async function startSession() {
     const calls = (e.detail.functionCalls || [])
       .map((c) => `${c.name}(${JSON.stringify(c.args)})`)
       .join("\n");
-    if (els.debugToolcall) {
-      els.debugToolcall.textContent = `[${time}] toolCall受信:\n${calls || JSON.stringify(e.detail)}`;
-    }
+    let debugText = `[${time}] toolCall受信:\n${calls || JSON.stringify(e.detail)}`;
     for (const call of e.detail.functionCalls || []) {
       if (call.name === "express" && call.args?.gesture) {
         viewer.playGesture(call.args.gesture);
+        debugText += `\n→ playGesture("${call.args.gesture}") 呼び出し済み`;
       }
+    }
+    if (els.debugToolcall) {
+      els.debugToolcall.textContent = debugText;
     }
   });
   client.addEventListener("error", (e) => {
