@@ -13,6 +13,16 @@ let modulesPromise = null;
  * サンプリングしてゆっくり追従させることで、人間の間の悪さ・不規則さに
  * 近い動きを作る。
  */
+// ジェスチャー名 → VRMAファイルのURL の対応表。ここに登録されている名前は
+// playGesture()呼び出し時にVRMA(AnimationMixer)で再生され、登録が無い名前は
+// 従来通り手書きEuler角(_animateGesture)にフォールバックする。
+// 現時点ではpixiv公式サンプル(test.vrma)を暫定的に"think_pose"へ割り当てて
+// いるだけで、内容自体は「考えるポーズ」を表現したものではない
+// (パイプラインの実配線を確認するための最小構成のため)。
+const GESTURE_VRMA_URLS = {
+  think_pose: "assets/motions/test.vrma",
+};
+
 function randomNormal(mean = 0, stdDev = 1) {
   let u = 0;
   let v = 0;
@@ -62,6 +72,8 @@ export class VrmViewer {
     this._gestureName = null;
     this._gestureStartTime = null;
     this._gestureDurationMs = 0;
+    this._gestureIsVrma = false; // 現在再生中のジェスチャーがVRMA(AnimationMixer)由来かどうか
+    this._vrmaClipCache = new Map(); // URL → AnimationClip(現在のvrmに対して生成済みのもの)
     // 頭のランダムな微動(正規分布ノイズ)の状態
     this._headTargetX = 0;
     this._headTargetY = 0;
@@ -229,6 +241,11 @@ export class VrmViewer {
     }
     this._removePlaceholder();
 
+    // VRMAクリップ・AnimationMixerは読み込み中のVRMのボーンノードに紐づいているため、
+    // モデルを差し替えるときは作り直す(古いクリップを新しいVRMへ使い回さない)。
+    this.mixer = null;
+    this._vrmaClipCache.clear();
+
     VRMUtils.rotateVRM0(vrm);
     this.scene.add(vrm.scene);
     this.vrm = vrm;
@@ -366,10 +383,89 @@ export class VrmViewer {
       console.warn(`[playGesture] VRM未読み込みのため無視: "${name}"`);
       return;
     }
-    console.log(`[playGesture] 再生開始: "${name}" (${durationMs || defaultDurations[name]}ms)`);
+
+    // VRMAが登録されているジェスチャー名は、そちらをAnimationMixerで再生する。
+    // 登録が無い名前は、従来通り手書きEuler角(_animateGesture)にフォールバックする。
+    const vrmaUrl = GESTURE_VRMA_URLS[name];
+    if (vrmaUrl) {
+      this._playGestureVrma(name, vrmaUrl, durationMs || defaultDurations[name]);
+      return;
+    }
+
+    console.log(`[playGesture] 再生開始(手書きEuler角): "${name}" (${durationMs || defaultDurations[name]}ms)`);
     this._gestureName = name;
+    this._gestureIsVrma = false;
     this._gestureStartTime = performance.now();
     this._gestureDurationMs = durationMs || defaultDurations[name];
+  }
+
+  /**
+   * VRMAファイル(登録済みのもの)を、既存のジェスチャー機構(_gestureName/
+   * isGesturing)に乗せる形で再生する。playGesture()から呼ばれる内部メソッド。
+   * ロード自体は非同期だが、呼び出し元(playGesture)は待たずに戻ってよい設計。
+   * @param {string} name ジェスチャー名(ログ・状態管理用)
+   * @param {string} url VRMAファイルのURL
+   * @param {number} durationMs 再生中とみなす時間の既定値(クリップの実尺が
+   *   取得でき次第そちらへ更新される)
+   */
+  async _playGestureVrma(name, url, durationMs) {
+    try {
+      await loadModules();
+
+      let clip = this._vrmaClipCache.get(url);
+      if (!clip) {
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+        const gltfVrma = await loader.loadAsync(url);
+        const vrmAnimation = gltfVrma.userData.vrmAnimations?.[0];
+        if (!vrmAnimation) {
+          throw new Error(`VRMAファイルにアニメーションが含まれていません: ${url}`);
+        }
+        clip = createVRMAnimationClip(vrmAnimation, this.vrm);
+        this._vrmaClipCache.set(url, clip);
+      }
+
+      if (!this.mixer) {
+        this.mixer = new THREE.AnimationMixer(this.vrm.scene);
+      }
+      this.mixer.stopAllAction();
+
+      const action = this.mixer.clipAction(clip);
+      action.reset();
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.fadeIn(0.15);
+      action.play();
+
+      this._gestureName = name;
+      this._gestureIsVrma = true;
+      this._gestureStartTime = performance.now();
+      this._gestureDurationMs = Math.max(durationMs, clip.duration * 1000);
+
+      // クリップの再生が実際に終わったタイミングで、確実に待機モーションへ戻す。
+      // (durationMsのタイマーだけに頼ると、実尺とズレた場合に不自然になるため)
+      // 注意: mixer.update()は_tick()側で毎フレーム無条件に呼ばれているため、
+      // ここでaction.stop()を同期的に呼ばないと、待機モーション側が同じボーンに
+      // 書き込んでも次のmixer.update()でクリップの最終姿勢に上書きされ続けて
+      // しまう(=待機モーションへ戻れない)。フェードのような遅延処理は入れず、
+      // 即座に停止して制御を待機モーションへ渡す。
+      const onFinished = (event) => {
+        if (event.action !== action) return;
+        this.mixer.removeEventListener("finished", onFinished);
+        action.stop();
+        if (this._gestureName === name) {
+          this._gestureName = null;
+          this._gestureIsVrma = false;
+        }
+      };
+      this.mixer.addEventListener("finished", onFinished);
+
+      console.log(`[playGesture] VRMAで再生開始: "${name}" ← ${url} (${clip.duration.toFixed(2)}秒)`);
+    } catch (err) {
+      console.error(`[playGesture] VRMAの再生に失敗しました: "${name}" (${url})`, err);
+      this._gestureName = null;
+      this._gestureIsVrma = false;
+    }
   }
 
   get isGesturing() {
@@ -438,6 +534,8 @@ export class VrmViewer {
       this.vrm = null;
     }
     this._boneBaseRotations = null;
+    this.mixer = null;
+    this._vrmaClipCache.clear();
     if (!this.placeholder) this._addPlaceholder();
   }
 
@@ -474,11 +572,17 @@ export class VrmViewer {
     }
 
     if (this.isGesturing) {
-      this._animateGesture(humanoid, base, nowMs);
-      this._animateFingerWiggle(humanoid, base, t);
+      if (this._gestureIsVrma) {
+        // VRMA(AnimationMixer)がボーンを直接動かしているため、ここでは
+        // 手書きEuler角(_animateGesture)や指の揺れを重ねて上書きしない。
+      } else {
+        this._animateGesture(humanoid, base, nowMs);
+        this._animateFingerWiggle(humanoid, base, t);
+      }
       return;
     } else if (this._gestureName !== null) {
       this._gestureName = null; // 再生時間が終わったので待機モーションへ戻す
+      this._gestureIsVrma = false;
     }
 
     // 単一周期のsin波だけだと機械的な繰り返しに見えるため、周期の異なる波を
