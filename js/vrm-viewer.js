@@ -451,35 +451,31 @@ export class VrmViewer {
     // 視線追従(lookAt)と競合しないよう vrm.update() の後、_tick()側で行う)。
     this._updateHeadFidgetTarget(t, delta);
 
-    // 話している間は、常時の揺れに加えて腕の身振り手振りを上乗せする。
-    // 実際の人間の身振りは左右対称でも一定のリズムでもないため、
-    // 左右で周期をずらし、さらに「強弱」がゆっくり変化する波を掛けることで
-    // 単調な繰り返しに見えないようにする。肘の曲げ伸ばし(前腕側)を
-    // 大きめにして、話しながら手を動かしている感じを強調する。
+    // 話している間は、常時の揺れに加えてごくわずかな手の動きだけを上乗せする。
+    // 以前はここで複数の速い周期のsin波を重ねて大きめに動かしていたが、
+    // 「ぴくぴく」と不自然に見えるとの指摘を受けて大幅に控えめにした。
+    // 今はAIのexpress()呼び出しによる、内容に応じたはっきりしたジェスチャー
+    // (nod/explain_hands/think_poseなど、playGesture側)が主役になったため、
+    // ここは「マイクに反応してわずかに動いている」程度で十分。
     const talk = this.mouthCurrent;
-    const emphasis = 0.55 + 0.45 * (Math.sin(t * 0.9) * 0.5 + 0.5);
-    const gestureL = Math.sin(t * 2.6) * 0.16 + Math.sin(t * 4.1 + 0.5) * 0.1 + Math.sin(t * 0.7) * 0.05;
-    const gestureR = Math.sin(t * 3.1 + 1.7) * 0.14 + Math.sin(t * 4.8 + 2.3) * 0.08;
-    const elbowL = Math.sin(t * 2.2 + 0.3) * 0.28 + Math.sin(t * 3.7) * 0.14;
-    const elbowR = Math.sin(t * 2.5 + 1.1) * 0.26 + Math.sin(t * 3.9 + 0.8) * 0.13;
+    const talkSway = Math.sin(t * 1.1) * 0.06 + Math.sin(t * 0.5 + 1.0) * 0.04;
 
-    // 腕は「はっきり動いている」と分かるくらいの大きさで常時揺らす
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
     if (leftUpperArm && base.leftUpperArm) {
-      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05 + gestureL * talk * emphasis;
+      leftUpperArm.rotation.z = base.leftUpperArm.z + breathe * 0.09 + micro * 0.05 + talkSway * talk;
     }
     const rightUpperArm = humanoid.getNormalizedBoneNode("rightUpperArm");
     if (rightUpperArm && base.rightUpperArm) {
-      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05 - gestureR * talk * emphasis;
+      rightUpperArm.rotation.z = base.rightUpperArm.z - breathe * 0.09 - micro * 0.05 - talkSway * talk;
     }
 
     const leftLowerArm = humanoid.getNormalizedBoneNode("leftLowerArm");
     if (leftLowerArm && base.leftLowerArm) {
-      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08 + elbowL * talk * emphasis;
+      leftLowerArm.rotation.x = base.leftLowerArm.x + micro * 0.08 + Math.sin(t * 0.8 + 0.4) * 0.08 * talk;
     }
     const rightLowerArm = humanoid.getNormalizedBoneNode("rightLowerArm");
     if (rightLowerArm && base.rightLowerArm) {
-      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + elbowR * talk * emphasis;
+      rightLowerArm.rotation.x = base.rightLowerArm.x + micro * 0.08 + Math.sin(t * 0.8 + 1.2) * 0.08 * talk;
     }
 
     this._animateFingerWiggle(humanoid, base, t);
