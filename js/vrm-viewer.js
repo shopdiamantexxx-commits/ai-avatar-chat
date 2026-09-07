@@ -768,14 +768,15 @@ export class VrmViewer {
       }
       case "think_pose": {
         // 右手を顎のあたりへ持っていくイメージ
+        // ※前腕を曲げる向き(X軸の符号)が実機で効いていなかったため反転して再検証中
         if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.5 * envelope;
-        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.7 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x - 1.7 * envelope;
         if (neck && base.neck) neck.rotation.z = base.neck.z + 0.15 * envelope;
         break;
       }
       case "cover_mouth": {
         if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.55 * envelope;
-        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 2.0 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x - 2.0 * envelope;
         break;
       }
       case "explain_hands": {
@@ -814,8 +815,8 @@ export class VrmViewer {
         // 大きく曲げる)だけで、両腕を体の前で折りたたむ形を作る。
         if (leftUpperArm && base.leftUpperArm) leftUpperArm.rotation.z = base.leftUpperArm.z + 0.45 * envelope;
         if (rightUpperArm && base.rightUpperArm) rightUpperArm.rotation.z = base.rightUpperArm.z - 0.45 * envelope;
-        if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x + 1.9 * envelope;
-        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x + 1.9 * envelope;
+        if (leftLowerArm && base.leftLowerArm) leftLowerArm.rotation.x = base.leftLowerArm.x - 1.9 * envelope;
+        if (rightLowerArm && base.rightLowerArm) rightLowerArm.rotation.x = base.rightLowerArm.x - 1.9 * envelope;
         break;
       }
       default:
