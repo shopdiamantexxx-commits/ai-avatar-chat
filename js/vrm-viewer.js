@@ -735,7 +735,17 @@ export class VrmViewer {
     const elapsed = (nowMs - this._gestureStartTime) / 1000;
     const durationSec = this._gestureDurationMs / 1000;
     const progress = Math.min(1, elapsed / durationSec);
-    const envelope = Math.sin(progress * Math.PI); // 0→1→0
+    // 「サッと上がってサッと戻る」だけだと一瞬すぎて見逃しやすいため、
+    // 台形型のenvelopeにする: 最初の20%で立ち上がり、真ん中60%はポーズを
+    // 保持(1.0のまま)、最後の20%で戻る。
+    let envelope;
+    if (progress < 0.2) {
+      envelope = Math.sin((progress / 0.2) * (Math.PI / 2)); // 0→1
+    } else if (progress < 0.8) {
+      envelope = 1;
+    } else {
+      envelope = Math.sin(((1 - progress) / 0.2) * (Math.PI / 2)); // 1→0
+    }
 
     const neck = humanoid.getNormalizedBoneNode("neck");
     const leftUpperArm = humanoid.getNormalizedBoneNode("leftUpperArm");
