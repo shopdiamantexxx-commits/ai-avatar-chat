@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>機種別分析 - 生産時間記録ツール</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/fx-style.css">
+<script src="js/settings.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="app__header">
+    <div class="app__header-top">
+      <div>
+        <h1>機種別分析</h1>
+        <p class="app__subtitle">機種・計画No.ごとの合計時間・台数・1台あたりの時間をまとめています</p>
+      </div>
+      <div class="app__nav-group">
+        <a href="status.html" class="btn btn--secondary app__nav-link">稼働状況を見る</a>
+        <a href="index.html" class="btn btn--secondary app__nav-link">← 記録に戻る</a>
+      </div>
+    </div>
+    <div class="sync-badge" id="sync-badge" data-state="connecting">
+      <span class="sync-badge__dot"></span>
+      <span id="sync-badge-text">接続確認中…</span>
+    </div>
+  </header>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>集計期間</h2>
+      <div class="chart-panel__controls">
+        <select id="chart-period" aria-label="集計期間"></select>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>機種別 分析</h2>
+      <div class="chart-panel__controls">
+        <button id="btn-export-analysis-csv" class="btn btn--ghost btn--small">機種別CSV出力</button>
+      </div>
+    </div>
+    <p class="chart-panel__hint">行をタップすると、その機種に関わった作業者ごとの内訳を確認できます。</p>
+    <div class="chart" id="model-chart"></div>
+    <p id="chart-empty" class="empty-message" hidden>記録がありません。</p>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>計画No.別 分析</h2>
+      <div class="chart-panel__controls">
+        <button id="btn-export-planno-csv" class="btn btn--ghost btn--small">計画No.別CSV出力</button>
+      </div>
+    </div>
+    <p class="chart-panel__hint">計画No.（作業の1件1件）ごとに、その機械にかかった合計作業時間をまとめています。行をタップすると作業者ごとの内訳を確認できます。</p>
+    <div class="chart" id="planno-chart"></div>
+    <p id="planno-chart-empty" class="empty-message" hidden>記録がありません。</p>
+  </section>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/analytics.js"></script>
+</body>
+</html>

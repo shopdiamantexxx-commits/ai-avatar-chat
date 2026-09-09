@@ -1,0 +1,21 @@
+# デプロイには、GitHub Secrets の FIREBASE_SERVICE_ACCOUNT に
+# Firebaseサービスアカウントの鍵(JSONファイルの中身そのまま)を登録しておく必要がある
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+          channelId: live
+          projectId: production-time-tool

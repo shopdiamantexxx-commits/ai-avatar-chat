@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>稼働状況 - 生産時間記録ツール</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/fx-style.css">
+<script src="js/settings.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="app__header">
+    <div class="app__header-top">
+      <div>
+        <h1>稼働状況</h1>
+        <p class="app__subtitle">今の稼働状況と、日別・時間帯別の稼働時間をグラフで確認できます</p>
+      </div>
+      <div class="app__nav-group">
+        <a href="analytics.html" class="btn btn--secondary app__nav-link">機種別分析を見る</a>
+        <a href="index.html" class="btn btn--secondary app__nav-link">← 記録に戻る</a>
+      </div>
+    </div>
+    <div class="sync-badge" id="sync-badge" data-state="connecting">
+      <span class="sync-badge__dot"></span>
+      <span id="sync-badge-text">接続確認中…</span>
+    </div>
+  </header>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>リアルタイム稼働状況</h2>
+    </div>
+    <p class="chart-panel__hint">今この瞬間、稼働タイマーで計測中・一時停止中の件数です（他の端末での操作もリアルタイムに反映されます）。</p>
+    <div class="vbar-chart vbar-chart--live" id="live-status-chart"></div>
+    <div class="live-status-list" id="live-status-list"></div>
+    <p id="live-status-empty" class="empty-message" hidden>現在、稼働中の計測はありません。</p>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>日別 稼働時間</h2>
+      <div class="chart-panel__controls">
+        <select id="daily-chart-period" aria-label="集計期間"></select>
+      </div>
+    </div>
+    <p class="chart-panel__hint">日ごとの合計稼働時間（休み時間差し引き後）です。「全期間」の場合は直近14日分を表示します。</p>
+    <div class="vbar-chart vbar-chart--scroll" id="daily-chart"></div>
+    <p id="daily-chart-empty" class="empty-message" hidden>記録がありません。</p>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="chart-panel__head">
+      <h2>時間帯別 稼働時間</h2>
+    </div>
+    <p class="chart-panel__hint">上で選んだ期間の記録を、開始した時間帯（0時〜23時）ごとに合計しています。開始時刻が不明な手入力の記録は含まれません。</p>
+    <div class="vbar-chart vbar-chart--scroll" id="hourly-chart"></div>
+    <p id="hourly-chart-empty" class="empty-message" hidden>時間帯が分かる記録がありません。</p>
+  </section>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/status.js"></script>
+</body>
+</html>
