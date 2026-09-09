@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生産時間記録ツール</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/fx-style.css">
+<script src="js/settings.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="app__header">
+    <div class="app__header-top">
+      <div>
+        <h1>生産時間記録ツール</h1>
+        <p class="app__subtitle">機種ごとの作業時間を記録します</p>
+      </div>
+      <div class="app__nav-group">
+        <a href="analytics.html" class="btn btn--secondary app__nav-link">機種別分析を見る</a>
+        <a href="status.html" class="btn btn--secondary app__nav-link">稼働状況を見る</a>
+      </div>
+    </div>
+    <div class="sync-badge" id="sync-badge" data-state="connecting">
+      <span class="sync-badge__dot"></span>
+      <span id="sync-badge-text">接続確認中…</span>
+    </div>
+  </header>
+
+  <section class="panel plan-table-panel" id="plan-table-panel" hidden>
+    <h2>計画表の管理（管理者用）</h2>
+    <p class="plan-table-panel__hint">画面上部の同期バッジが「全端末で共有中」の場合、ここでの変更は全端末に反映されます。「この端末のみ」の場合は、この端末のブラウザにのみ保存されます。</p>
+
+    <div class="admin-block">
+      <h3 class="admin-block__title">① 計画No.・機種名・台数（Excelから取り込み）</h3>
+      <p class="plan-table-panel__hint">計画表のExcelファイル（.xls / .xlsx）を選ぶと、A〜C列（15行目以降）を自動で読み込んで計画No.・機種名・台数を一括で更新します。</p>
+      <input type="file" id="plan-table-excel-file" accept=".xls,.xlsx">
+      <p id="plan-table-excel-status" class="plan-table-panel__status"></p>
+    </div>
+
+    <div class="admin-block">
+      <h3 class="admin-block__title">② 貼り付けで取り込み</h3>
+      <p class="plan-table-panel__hint">「計画No., 機種名, 台数」の順でタブまたはカンマ区切りで1行ずつ貼り付けてください（計画表のA〜C列をそのまま選択してコピー&amp;ペーストできます）。</p>
+      <textarea id="plan-table-input" rows="4" placeholder="381　LP-1600U　2"></textarea>
+      <div class="plan-table-panel__actions">
+        <button id="btn-import-plan-table" class="btn btn--secondary">取り込む</button>
+        <button id="btn-clear-plan-table" class="btn btn--ghost btn--danger-text">計画No.データをクリア</button>
+        <span id="plan-table-status" class="plan-table-panel__status"></span>
+      </div>
+    </div>
+
+    <div class="admin-block">
+      <h3 class="admin-block__title">③ 計画表PDFの追加・管理</h3>
+      <p class="plan-table-panel__hint">複数の計画表PDFを名前を付けて登録できます。画面上部のタブで切り替えて見られます。</p>
+      <div class="plan-pdf-admin-list" id="plan-pdf-admin-list"></div>
+      <div class="plan-pdf-admin-add">
+        <input type="text" id="plan-pdf-new-name" placeholder="名前（例: 生産計画）">
+        <input type="file" id="plan-pdf-file" accept="application/pdf">
+        <button type="button" id="btn-add-plan-pdf" class="btn btn--secondary btn--small">追加</button>
+      </div>
+      <span id="plan-pdf-upload-status" class="plan-table-panel__status"></span>
+    </div>
+
+    <div class="admin-block">
+      <h3 class="admin-block__title">④ 休み時間の設定</h3>
+      <p class="plan-table-panel__hint">計測した時間から、ここで指定した時間帯にかかった分を自動で差し引きます。</p>
+      <div class="break-periods-list" id="break-periods-list"></div>
+      <button type="button" class="btn btn--secondary btn--small" id="btn-add-break-period">＋ 時間帯を追加</button>
+    </div>
+  </section>
+
+  <div class="top-layout">
+  <section class="panel timer-panel">
+    <div class="timer-panel__head">
+      <h2>稼働タイマー</h2>
+      <div class="andon" id="andon" data-state="idle" title="稼働状態インジケーター">
+        <span class="andon__lamp andon__lamp--good"></span>
+        <span class="andon__lamp andon__lamp--warn"></span>
+        <span class="andon__lamp andon__lamp--idle"></span>
+      </div>
+    </div>
+    <div class="timer-panel__inputs">
+      <label class="field field--wide">
+        <span class="field__label">計画No.</span>
+        <div class="combobox">
+          <input type="text" id="plan-no" placeholder="計画No.を入力（複数可）" autocomplete="off" inputmode="none"
+                 role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="plan-no-listbox">
+          <ul class="combobox__list" id="plan-no-listbox" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span class="field__label">機種名</span>
+          <div class="combobox">
+            <input type="text" id="item-name" placeholder="機種名を入力して絞り込み" autocomplete="off" inputmode="none"
+                   role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="item-name-listbox">
+            <ul class="combobox__list" id="item-name-listbox" role="listbox" hidden></ul>
+          </div>
+        </label>
+        <label class="field field--quantity">
+          <span class="field__label">台数</span>
+          <input type="text" id="item-quantity" value="1" inputmode="none" autocomplete="off" maxlength="4">
+        </label>
+      </div>
+      <label class="field field--wide">
+        <span class="field__label">作業者</span>
+        <input type="text" id="worker-name" list="worker-suggestions" placeholder="氏名を入力" autocomplete="off">
+        <datalist id="worker-suggestions"></datalist>
+      </label>
+    </div>
+
+    <div class="timer-panel__controls">
+      <button id="btn-start" class="btn btn--primary">
+        <svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9-5.5-9-5.5z" fill="currentColor"/></svg>
+        開始
+      </button>
+    </div>
+
+    <p class="timer-panel__hint">同じ端末でも複数人が同時に「開始」できます。それぞれ個別に一時停止・終了できます。</p>
+
+    <div class="sessions" id="active-sessions"></div>
+    <p id="sessions-empty" class="empty-message" hidden>進行中の記録はありません。</p>
+
+    <div class="manual-entry">
+      <details>
+        <summary>手入力で追加</summary>
+        <div class="manual-entry__form">
+          <div class="field-stack">
+            <label class="field">
+              <span class="field__label">計画No.</span>
+              <div class="combobox">
+                <input type="text" id="manual-plan-no" placeholder="計画No.を入力（複数可）" autocomplete="off" inputmode="none"
+                       role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="manual-plan-no-listbox">
+                <ul class="combobox__list" id="manual-plan-no-listbox" role="listbox" hidden></ul>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field__label">機種名</span>
+              <div class="combobox">
+                <input type="text" id="manual-item-name" placeholder="機種名を入力して絞り込み" autocomplete="off" inputmode="none"
+                       role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="manual-item-name-listbox">
+                <ul class="combobox__list" id="manual-item-name-listbox" role="listbox" hidden></ul>
+              </div>
+            </label>
+          </div>
+          <p class="manual-entry__hint">開始・終了時刻を入力すると、会社の休み時間を自動で差し引いて作業時間を計算します。入力しない場合は「作業時間(分)」がそのまま使われます。</p>
+          <div class="field-stack">
+            <label class="field">
+              <span class="field__label">開始時刻（任意）</span>
+              <input type="time" id="manual-start-time">
+            </label>
+            <label class="field">
+              <span class="field__label">終了時刻（任意）</span>
+              <input type="time" id="manual-end-time">
+            </label>
+          </div>
+          <label class="field">
+            <span class="field__label">作業時間 (分)（開始・終了未入力の場合）</span>
+            <input type="number" id="manual-duration" min="1" step="1">
+          </label>
+          <label class="field">
+            <span class="field__label">日付</span>
+            <input type="date" id="manual-date">
+          </label>
+          <label class="field">
+            <span class="field__label">台数</span>
+            <input type="text" id="manual-quantity" value="1" inputmode="none" autocomplete="off" maxlength="4">
+          </label>
+          <label class="field">
+            <span class="field__label">作業者</span>
+            <input type="text" id="manual-worker-name" list="worker-suggestions" placeholder="氏名を入力" autocomplete="off">
+          </label>
+          <button id="btn-manual-add" class="btn btn--secondary">追加</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="panel plan-table-view-panel">
+    <div class="plan-pdf-panel__head">
+      <h2>計画表</h2>
+      <div class="plan-pdf-panel__zoom">
+        <button type="button" id="btn-toggle-dual-pdf" class="btn btn--ghost btn--small">2枚表示</button>
+      </div>
+    </div>
+    <div class="plan-pdf-panes" id="plan-pdf-panes">
+      <div class="plan-pdf-pane" id="plan-pdf-pane-a">
+        <div class="plan-pdf-pane__zoom">
+          <button type="button" id="btn-pdf-zoom-out" class="btn btn--ghost btn--small">－</button>
+          <span id="pdf-zoom-level" class="plan-pdf-panel__zoom-level">100%</span>
+          <button type="button" id="btn-pdf-zoom-in" class="btn btn--ghost btn--small">＋</button>
+          <button type="button" id="btn-pdf-zoom-reset" class="btn btn--ghost btn--small">全体表示</button>
+        </div>
+        <div class="plan-pdf-tabs" id="plan-pdf-tabs"></div>
+        <div class="plan-pdf-viewport" id="plan-pdf-viewport">
+          <canvas id="plan-pdf-canvas"></canvas>
+        </div>
+        <p id="plan-pdf-status" class="empty-message" hidden>計画表(PDF)を読み込み中…</p>
+      </div>
+      <div class="plan-pdf-pane" id="plan-pdf-pane-b" hidden>
+        <div class="plan-pdf-pane__zoom">
+          <button type="button" id="btn-pdf-zoom-out-b" class="btn btn--ghost btn--small">－</button>
+          <span id="pdf-zoom-level-b" class="plan-pdf-panel__zoom-level">100%</span>
+          <button type="button" id="btn-pdf-zoom-in-b" class="btn btn--ghost btn--small">＋</button>
+          <button type="button" id="btn-pdf-zoom-reset-b" class="btn btn--ghost btn--small">全体表示</button>
+        </div>
+        <div class="plan-pdf-tabs" id="plan-pdf-tabs-b"></div>
+        <div class="plan-pdf-viewport" id="plan-pdf-viewport-b">
+          <canvas id="plan-pdf-canvas-b"></canvas>
+        </div>
+        <p id="plan-pdf-status-b" class="empty-message" hidden>計画表(PDF)を読み込み中…</p>
+      </div>
+    </div>
+  </section>
+  </div>
+
+  <section class="panel records-panel">
+    <div class="records-panel__header">
+      <h2>記録一覧</h2>
+      <div class="records-panel__actions">
+        <input type="date" id="filter-date">
+        <button id="btn-clear-filter" class="btn btn--ghost">絞込解除</button>
+        <button id="btn-export-csv" class="btn btn--secondary">CSV出力</button>
+        <button id="btn-clear-all" class="btn btn--ghost btn--danger-text" hidden>全削除</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="records-table">
+        <thead>
+          <tr>
+            <th>作業者</th>
+            <th>状態</th>
+            <th>日付</th>
+            <th>機種名</th>
+            <th>計画No.</th>
+            <th>開始</th>
+            <th>終了</th>
+            <th>作業時間</th>
+            <th>台数</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="records-tbody"></tbody>
+      </table>
+      <p id="empty-message" class="empty-message" hidden>記録がありません。</p>
+    </div>
+  </section>
+
+  <p class="app__foot">全端末で共有中は、記録・計画表・PDFがこのページを開いている全員にリアルタイムで反映されます。共有できない場合はこの端末のブラウザ内にのみ保存されます。</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
